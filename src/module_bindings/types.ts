@@ -8,18 +8,29 @@ import {
   t as __t,
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
-} from 'spacetimedb';
+} from "spacetimedb";
 
-export const Message = __t.object('Message', {
-  sender: __t.identity(),
-  sent: __t.timestamp(),
-  text: __t.string(),
+export const GameConfig = __t.object("GameConfig", {
+  id: __t.u64(),
+  roundActive: __t.bool(),
+  roundNumber: __t.u64(),
+  roundStartMicros: __t.u64(),
+  roundEndMicros: __t.u64(),
+  lastTickMicros: __t.u64(),
+  mapWidth: __t.f64(),
+  mapHeight: __t.f64(),
 });
-export type Message = __Infer<typeof Message>;
+export type GameConfig = __Infer<typeof GameConfig>;
 
-export const User = __t.object('User', {
+export const Player = __t.object("Player", {
   identity: __t.identity(),
-  name: __t.option(__t.string()),
-  online: __t.bool(),
+  x: __t.f64(),
+  y: __t.f64(),
+  dirX: __t.f64(),
+  dirY: __t.f64(),
+  isZombie: __t.bool(),
+  name: __t.string(),
+  score: __t.u64(),
 });
-export type User = __Infer<typeof User>;
+export type Player = __Infer<typeof Player>;
+

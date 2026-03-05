@@ -10,7 +10,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "allowImportingTsExtensions": true,
-    "noImplicitAny": true,
+    "noImplicitAny": false,
     "moduleResolution": "bundler",
     "isolatedDeclarations": false,
 

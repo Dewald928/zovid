@@ -7,7 +7,7 @@ export function createGameConfig(parent: string): Phaser.Types.Core.GameConfig {
     parent,
     width: window.innerWidth,
     height: window.innerHeight,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#0f1f14',
     scene: [MainScene],
     scale: {
       mode: Phaser.Scale.RESIZE,

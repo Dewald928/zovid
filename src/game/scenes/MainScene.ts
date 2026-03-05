@@ -142,13 +142,17 @@ export class MainScene extends Phaser.Scene {
     this.lastMapW = mapW;
     this.lastMapH = mapH;
 
-    const keys = this.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT') as Record<string, Phaser.Input.Keyboard.Key> & {
-      W: Phaser.Input.Keyboard.Key;
-      A: Phaser.Input.Keyboard.Key;
-      S: Phaser.Input.Keyboard.Key;
-      D: Phaser.Input.Keyboard.Key;
-    };
-    this.registry.set('moveKeys', keys);
+    if (this.input.keyboard) {
+      const keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT') as Record<string, Phaser.Input.Keyboard.Key> & {
+        W: Phaser.Input.Keyboard.Key;
+        A: Phaser.Input.Keyboard.Key;
+        S: Phaser.Input.Keyboard.Key;
+        D: Phaser.Input.Keyboard.Key;
+      };
+      this.registry.set('moveKeys', keys);
+    } else {
+      this.registry.set('moveKeys', null);
+    }
 
     // Fog sprite: dark everywhere with gradient vision hole in center
     // Size it to cover the full screen even when camera is bounds-clamped
@@ -231,19 +235,21 @@ export class MainScene extends Phaser.Scene {
       this.drawArena(this.arenaGraphics, mapW, mapH);
     }
 
-    const keys = this.registry.get('moveKeys') as Record<string, Phaser.Input.Keyboard.Key> & {
+    const keys = this.registry.get('moveKeys') as (Record<string, Phaser.Input.Keyboard.Key> & {
       W: Phaser.Input.Keyboard.Key;
       A: Phaser.Input.Keyboard.Key;
       S: Phaser.Input.Keyboard.Key;
       D: Phaser.Input.Keyboard.Key;
-    };
+    }) | null;
     let dirX = 0;
     let dirY = 0;
-    const k = keys as Record<string, Phaser.Input.Keyboard.Key | undefined>;
-    if (keys.W?.isDown || k['UP']?.isDown) dirY -= 1;
-    if (keys.S?.isDown || k['DOWN']?.isDown) dirY += 1;
-    if (keys.A?.isDown || k['LEFT']?.isDown) dirX -= 1;
-    if (keys.D?.isDown || k['RIGHT']?.isDown) dirX += 1;
+    if (keys) {
+      const k = keys as Record<string, Phaser.Input.Keyboard.Key | undefined>;
+      if (keys.W?.isDown || k['UP']?.isDown) dirY -= 1;
+      if (keys.S?.isDown || k['DOWN']?.isDown) dirY += 1;
+      if (keys.A?.isDown || k['LEFT']?.isDown) dirX -= 1;
+      if (keys.D?.isDown || k['RIGHT']?.isDown) dirX += 1;
+    }
     if (this.joystick) {
       const jx = this.joystick.getDirX();
       const jy = this.joystick.getDirY();

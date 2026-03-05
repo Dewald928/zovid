@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { getConnection, getGameState, getLocalIdentity } from '../stdbBridge';
+import { VirtualJoystick } from '../VirtualJoystick';
 
 const PLAYER_SIZE = 32;
 const HUMAN_COLOR = 0x4488ff;
@@ -29,6 +30,7 @@ export class MainScene extends Phaser.Scene {
   private localIdentityHex: string | null = null;
   private lastMapW = 0;
   private lastMapH = 0;
+  private joystick: VirtualJoystick | null = null;
 
   constructor() {
     super({ key: 'MainScene' });
@@ -199,6 +201,10 @@ export class MainScene extends Phaser.Scene {
 
     this.fogSprite.cameraFilter |= this.minimapCam.id;
     this.minimapBorder.cameraFilter |= this.minimapCam.id;
+
+    if (VirtualJoystick.isTouchDevice()) {
+      this.joystick = new VirtualJoystick(this);
+    }
   }
 
   update(_time: number, _delta: number): void {
@@ -238,6 +244,14 @@ export class MainScene extends Phaser.Scene {
     if (keys.S?.isDown || k['DOWN']?.isDown) dirY += 1;
     if (keys.A?.isDown || k['LEFT']?.isDown) dirX -= 1;
     if (keys.D?.isDown || k['RIGHT']?.isDown) dirX += 1;
+    if (this.joystick) {
+      const jx = this.joystick.getDirX();
+      const jy = this.joystick.getDirY();
+      if (jx !== 0 || jy !== 0) {
+        dirX = jx;
+        dirY = jy;
+      }
+    }
     if (dirX !== this.lastDirX || dirY !== this.lastDirY) {
       this.lastDirX = dirX;
       this.lastDirY = dirY;

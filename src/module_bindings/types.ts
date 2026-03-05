@@ -22,6 +22,17 @@ export const GameConfig = __t.object("GameConfig", {
 });
 export type GameConfig = __Infer<typeof GameConfig>;
 
+export const Obstacle = __t.object("Obstacle", {
+  id: __t.u64(),
+  groupId: __t.u64(),
+  x: __t.f64(),
+  y: __t.f64(),
+  width: __t.f64(),
+  height: __t.f64(),
+  obstacleType: __t.string(),
+});
+export type Obstacle = __Infer<typeof Obstacle>;
+
 export const Player = __t.object("Player", {
   identity: __t.identity(),
   x: __t.f64(),

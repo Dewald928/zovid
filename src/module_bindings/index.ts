@@ -42,6 +42,7 @@ import TickReducer from "./tick_reducer";
 
 // Import all table schema definitions
 import GameConfigRow from "./game_config_table";
+import ObstacleRow from "./obstacle_table";
 import PlayerRow from "./player_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -59,6 +60,17 @@ const tablesSchema = __schema({
       { name: 'game_config_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, GameConfigRow),
+  Obstacle: __table({
+    name: 'obstacle',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'obstacle_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ObstacleRow),
   Player: __table({
     name: 'player',
     indexes: [

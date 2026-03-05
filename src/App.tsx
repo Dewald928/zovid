@@ -15,6 +15,7 @@ function App() {
 
   const [players] = useTable(tables.Player);
   const [configRows] = useTable(tables.GameConfig);
+  const [obstacles] = useTable(tables.Obstacle);
 
   const config = configRows.length > 0 ? configRows[0] : null;
 
@@ -40,8 +41,9 @@ function App() {
     setGameState({
       players: players ? [...players] : [],
       config,
+      obstacles: obstacles ? [...obstacles] : [],
     });
-  }, [players, config]);
+  }, [players, config, obstacles]);
 
   useEffect(() => {
     if (!containerRef.current || !isActive) return;

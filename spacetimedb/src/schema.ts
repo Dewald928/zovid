@@ -33,3 +33,19 @@ export const GameConfig = table(
     mapHeight: t.f64(),
   }
 );
+
+export const Obstacle = table(
+  {
+    name: 'obstacle',
+    public: true,
+  },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    groupId: t.u64(),
+    x: t.f64(),
+    y: t.f64(),
+    width: t.f64(),
+    height: t.f64(),
+    obstacleType: t.string(),
+  }
+);

@@ -18,11 +18,19 @@ const GRID_SPACING = 200;
 const DECOR_COLOR_1 = 0x1e3a24;
 const DECOR_COLOR_2 = 0x162c1a;
 const FOG_ALPHA = 0.95;
+const OBSTACLE_DEPTH = 50;
+const BUILDING_FILL = 0x4a4a4a;
+const BUILDING_BORDER = 0x666666;
+const RUIN_FILL = 0x5a5040;
+const RUIN_BORDER = 0x6a6050;
+const TREE_FILL = 0x2d5a1e;
+const TREE_TRUNK = 0x4a3520;
 
 export class MainScene extends Phaser.Scene {
   private playerSprites!: Map<string, Phaser.GameObjects.Rectangle>;
   private fogSprite!: Phaser.GameObjects.Image;
   private arenaGraphics!: Phaser.GameObjects.Graphics;
+  private obstacleGraphics!: Phaser.GameObjects.Graphics;
   private minimapBorder!: Phaser.GameObjects.Graphics;
   private minimapCam!: Phaser.Cameras.Scene2D.Camera;
   private lastDirX = 0;
@@ -30,6 +38,9 @@ export class MainScene extends Phaser.Scene {
   private localIdentityHex: string | null = null;
   private lastMapW = 0;
   private lastMapH = 0;
+  private lastObstacleCount = -1;
+  private lastObstacleIdSig = '';
+  private lastRoundNumber: string = '';
   private joystick: VirtualJoystick | null = null;
 
   constructor() {
@@ -119,6 +130,42 @@ export class MainScene extends Phaser.Scene {
     g.strokeRect(0, 0, w, h);
   }
 
+  private drawObstacles(
+    g: Phaser.GameObjects.Graphics,
+    obstacles: Array<{ x: number; y: number; width: number; height: number; obstacleType: string }>
+  ): void {
+    g.clear();
+    const hash = (a: number, b: number) => ((a * 2654435761) ^ (b * 2246822519)) >>> 0;
+    for (const o of obstacles) {
+      const left = o.x - o.width / 2;
+      const top = o.y - o.height / 2;
+      if (o.obstacleType === 'building_wall') {
+        g.fillStyle(BUILDING_FILL, 1);
+        g.fillRect(left, top, o.width, o.height);
+        g.lineStyle(1, BUILDING_BORDER, 1);
+        g.strokeRect(left, top, o.width, o.height);
+      } else if (o.obstacleType === 'ruin') {
+        const alpha = 0.7 + (hash(Math.floor(o.x), Math.floor(o.y)) % 21) / 100;
+        g.fillStyle(RUIN_FILL, alpha);
+        g.fillRect(left, top, o.width, o.height);
+        g.lineStyle(1, RUIN_BORDER, 0.9);
+        g.strokeRect(left, top, o.width, o.height);
+        for (let r = 0; r < 4; r++) {
+          const rx = left + (hash(r, Math.floor(o.y)) % 100) / 100 * o.width;
+          const ry = top + (hash(Math.floor(o.x), r) % 100) / 100 * o.height;
+          g.fillStyle(0x3a3020, 0.5);
+          g.fillCircle(rx, ry, 1.5);
+        }
+      } else if (o.obstacleType === 'tree') {
+        const radius = o.width / 2;
+        g.fillStyle(TREE_FILL, 1);
+        g.fillCircle(o.x, o.y, radius);
+        g.fillStyle(TREE_TRUNK, 1);
+        g.fillCircle(o.x, o.y, Math.max(2, radius * 0.25));
+      }
+    }
+  }
+
   private drawMinimapBorder(x: number, y: number, size: number, pad: number): void {
     this.minimapBorder.clear();
     this.minimapBorder.lineStyle(2, 0xcc3333, 0.9);
@@ -139,6 +186,8 @@ export class MainScene extends Phaser.Scene {
     this.arenaGraphics = this.add.graphics();
     this.arenaGraphics.setDepth(0);
     this.drawArena(this.arenaGraphics, mapW, mapH);
+    this.obstacleGraphics = this.add.graphics();
+    this.obstacleGraphics.setDepth(OBSTACLE_DEPTH);
     this.lastMapW = mapW;
     this.lastMapH = mapH;
 
@@ -233,6 +282,19 @@ export class MainScene extends Phaser.Scene {
       this.lastMapW = mapW;
       this.lastMapH = mapH;
       this.drawArena(this.arenaGraphics, mapW, mapH);
+    }
+    const obstacles = getGameState().obstacles ?? [];
+    const roundNumber = config?.roundNumber?.toString() ?? '0';
+    const idSig = obstacles.length > 0 ? `${obstacles.length}-${obstacles[0].id.toString()}` : '0';
+    const shouldRedraw =
+      roundNumber !== this.lastRoundNumber ||
+      obstacles.length !== this.lastObstacleCount ||
+      idSig !== this.lastObstacleIdSig;
+    if (shouldRedraw) {
+      this.lastRoundNumber = roundNumber;
+      this.lastObstacleCount = obstacles.length;
+      this.lastObstacleIdSig = idSig;
+      this.drawObstacles(this.obstacleGraphics, obstacles);
     }
 
     const keys = this.registry.get('moveKeys') as (Record<string, Phaser.Input.Keyboard.Key> & {

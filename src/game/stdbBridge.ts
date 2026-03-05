@@ -1,4 +1,4 @@
-import type { Player, GameConfig } from '../module_bindings/types';
+import type { Player, GameConfig, Obstacle } from '../module_bindings/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _conn: any = null;
@@ -14,9 +14,10 @@ export function getConnection(): typeof _conn {
 export interface GameState {
   players: Player[];
   config: GameConfig | null;
+  obstacles: Obstacle[];
 }
 
-let _gameState: GameState = { players: [], config: null };
+let _gameState: GameState = { players: [], config: null, obstacles: [] };
 
 export function setGameState(state: GameState): void {
   _gameState = state;

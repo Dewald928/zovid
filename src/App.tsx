@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import './App.css';
 import { useSpacetimeDB, useTable } from 'spacetimedb/react';
-import { tables } from './module_bindings';
+import { DbConnection, tables } from './module_bindings';
 import { setConnection, setGameState, setLocalIdentity } from './game/stdbBridge';
 import { createGameConfig } from './game/config';
 import Phaser from 'phaser';
@@ -9,7 +9,7 @@ import { HUD } from './components/HUD';
 
 function App() {
   const { getConnection, identity, isActive } = useSpacetimeDB();
-  const connection = getConnection();
+  const connection = getConnection() as DbConnection | null;
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 

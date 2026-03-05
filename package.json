@@ -1,5 +1,6 @@
 {
   "name": "zovid",
+  "description": "The massive zombie plague survival game",
   "private": true,
   "version": "0.0.1",
   "type": "module",

@@ -28,6 +28,7 @@ const TREE_TRUNK = 0x4a3520;
 
 export class MainScene extends Phaser.Scene {
   private playerSprites!: Map<string, Phaser.GameObjects.Rectangle>;
+  private playerNames!: Map<string, Phaser.GameObjects.Text>;
   private fogSprite!: Phaser.GameObjects.Image;
   private arenaGraphics!: Phaser.GameObjects.Graphics;
   private obstacleGraphics!: Phaser.GameObjects.Graphics;
@@ -176,6 +177,7 @@ export class MainScene extends Phaser.Scene {
 
   create(): void {
     this.playerSprites = new Map();
+    this.playerNames = new Map();
     const mapW = 2000;
     const mapH = 2000;
 
@@ -356,11 +358,37 @@ export class MainScene extends Phaser.Scene {
       }
       const color = isLocal(key) ? LOCAL_COLOR : p.isZombie ? ZOMBIE_COLOR : HUMAN_COLOR;
       rect.setFillStyle(color);
+
+      let nameText = this.playerNames.get(key);
+      const displayName = p.name || 'Player';
+      if (!nameText) {
+        nameText = this.add.text(rect.x, rect.y - PLAYER_SIZE - 4, displayName, {
+          fontSize: '12px',
+          fontFamily: 'Arial, sans-serif',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 3,
+          align: 'center',
+        });
+        nameText.setOrigin(0.5, 1);
+        nameText.setDepth(101);
+        nameText.cameraFilter |= this.minimapCam.id;
+        this.playerNames.set(key, nameText);
+      }
+      nameText.setPosition(rect.x, rect.y - PLAYER_SIZE / 2 - 4);
+      if (nameText.text !== displayName) {
+        nameText.setText(displayName);
+      }
     }
     for (const [key, rect] of this.playerSprites) {
       if (!seen.has(key)) {
         rect.destroy();
         this.playerSprites.delete(key);
+        const nameText = this.playerNames.get(key);
+        if (nameText) {
+          nameText.destroy();
+          this.playerNames.delete(key);
+        }
       }
     }
 

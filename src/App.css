@@ -97,3 +97,83 @@
 .hud-leaderboard li {
   margin-bottom: 0.25rem;
 }
+
+.hud-name {
+  margin-top: 0.5rem;
+  pointer-events: auto;
+}
+
+.hud-name-display {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.95rem;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.hud-name-display:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.hud-name-edit-icon {
+  margin-left: 0.35rem;
+  font-size: 0.85rem;
+  opacity: 0.6;
+}
+
+.hud-name-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hud-name-input {
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.95rem;
+  padding: 0.3rem 0.5rem;
+  width: 160px;
+  outline: none;
+}
+
+.hud-name-input:focus {
+  border-color: #4488ff;
+}
+
+.hud-name-btn {
+  background: #4488ff;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+}
+
+.hud-name-btn:hover {
+  background: #3377ee;
+}
+
+.hud-name-cancel {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.hud-name-cancel:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.hud-name-error {
+  width: 100%;
+  text-align: center;
+  color: #ff5555;
+  font-size: 0.8rem;
+  margin-top: 0.2rem;
+}

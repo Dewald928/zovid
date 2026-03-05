@@ -366,7 +366,18 @@ export const set_name = spacetimedb.reducer({ name: t.string() }, (ctx, { name }
   const player = ctx.db.Player.identity.find(ctx.sender);
   if (!player) throw new SenderError('Not in game');
   const trimmed = (name ?? '').trim().slice(0, 32);
-  ctx.db.Player.identity.update({ ...player, name: trimmed || 'Player' });
+  const finalName = trimmed || 'Player';
+
+  for (const other of ctx.db.Player.iter()) {
+    if (
+      other.identity.toHexString() !== ctx.sender.toHexString() &&
+      other.name.toLowerCase() === finalName.toLowerCase()
+    ) {
+      throw new SenderError('Name already taken');
+    }
+  }
+
+  ctx.db.Player.identity.update({ ...player, name: finalName });
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────

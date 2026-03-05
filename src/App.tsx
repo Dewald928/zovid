@@ -76,7 +76,7 @@ function App() {
   return (
     <div className="app">
       <div ref={containerRef} id="phaser-game" className="app-game" />
-      <HUD players={players ? [...players] : []} config={config} localIdentity={identity ?? undefined} />
+      <HUD players={players ? [...players] : []} config={config} localIdentity={identity ?? undefined} connection={connection ?? null} />
     </div>
   );
 }

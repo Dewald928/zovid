@@ -16,7 +16,7 @@ const GRID_COLOR = 0x224428;
 const GRID_SPACING = 200;
 const DECOR_COLOR_1 = 0x1e3a24;
 const DECOR_COLOR_2 = 0x162c1a;
-const FOG_SIZE = 3000;
+const FOG_ALPHA = 0.95;
 
 export class MainScene extends Phaser.Scene {
   private playerSprites!: Map<string, Phaser.GameObjects.Rectangle>;
@@ -38,11 +38,9 @@ export class MainScene extends Phaser.Scene {
     g.clear();
     const hash = (a: number, b: number) => ((a * 2654435761) ^ (b * 2246822519)) >>> 0;
 
-    // Base floor
     g.fillStyle(ARENA_FILL, 1);
     g.fillRect(0, 0, w, h);
 
-    // Ground color patches for tonal variation
     const patchSize = 100;
     const patchColors = [0x1c3622, 0x17301c, 0x1f3926, 0x152b19, 0x213d28];
     for (let px = 0; px < w; px += patchSize) {
@@ -56,7 +54,6 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
-    // Grid lines
     g.lineStyle(1, GRID_COLOR, 0.35);
     for (let x = GRID_SPACING; x < w; x += GRID_SPACING) {
       g.lineBetween(x, 0, x, h);
@@ -65,12 +62,11 @@ export class MainScene extends Phaser.Scene {
       g.lineBetween(0, y, w, y);
     }
 
-    // Dense scattered details — multiple per cell
     const cellSize = 80;
     for (let cx = 0; cx < w; cx += cellSize) {
       for (let cy = 0; cy < h; cy += cellSize) {
         const s = hash(cx, cy);
-        const count = 1 + (s % 3); // 1-3 decorations per cell
+        const count = 1 + (s % 3);
         for (let i = 0; i < count; i++) {
           const si = hash(cx + i * 311, cy + i * 173);
           const kind = si % 8;
@@ -81,51 +77,42 @@ export class MainScene extends Phaser.Scene {
           if (dx >= w - 2 || dy >= h - 2) continue;
 
           if (kind === 0) {
-            // Grass tuft (3 small lines)
             g.lineStyle(1, 0x2a5a30, 0.5);
             g.lineBetween(dx, dy, dx - 2, dy - 6);
             g.lineBetween(dx, dy, dx + 1, dy - 7);
             g.lineBetween(dx, dy, dx + 3, dy - 5);
           } else if (kind === 1) {
-            // Dirt speck
             g.fillStyle(0x2a2818, 0.3);
             g.fillCircle(dx, dy, 2 + (si % 2));
           } else if (kind === 2) {
-            // Dot cluster (pebbles)
             g.fillStyle(DECOR_COLOR_1, 0.4);
             g.fillCircle(dx, dy, 2);
             g.fillCircle(dx + 6, dy + 3, 1.5);
             g.fillCircle(dx - 4, dy + 5, 1.5);
           } else if (kind === 3) {
-            // Small dark patch
             g.fillStyle(DECOR_COLOR_2, 0.3);
             const sz = 4 + (si % 5);
             g.fillRect(dx - sz / 2, dy - sz / 2, sz, sz);
           } else if (kind === 4) {
-            // Tall grass tuft
             g.lineStyle(1, 0x306838, 0.45);
             g.lineBetween(dx - 1, dy, dx - 4, dy - 9);
             g.lineBetween(dx, dy, dx + 1, dy - 10);
             g.lineBetween(dx + 1, dy, dx + 5, dy - 8);
             g.lineBetween(dx + 2, dy, dx + 3, dy - 6);
           } else if (kind === 5) {
-            // Small diamond marker
             g.fillStyle(DECOR_COLOR_1, 0.5);
             g.fillPoint(dx, dy - 3, 2);
             g.fillPoint(dx - 3, dy, 2);
             g.fillPoint(dx + 3, dy, 2);
             g.fillPoint(dx, dy + 3, 2);
           } else if (kind === 6) {
-            // Moss patch (soft circle)
             g.fillStyle(0x1a4020, 0.25);
             g.fillCircle(dx, dy, 6 + (si % 4));
           }
-          // kind === 7: empty
         }
       }
     }
 
-    // Border
     g.lineStyle(4, ARENA_BORDER, 1);
     g.strokeRect(0, 0, w, h);
   }
@@ -161,17 +148,20 @@ export class MainScene extends Phaser.Scene {
     };
     this.registry.set('moveKeys', keys);
 
-    // Generate fog texture: dark everywhere with a gradient transparent hole in center
-    const fogTex = this.textures.createCanvas('fogTex', FOG_SIZE, FOG_SIZE);
+    // Fog sprite: dark everywhere with gradient vision hole in center
+    // Size it to cover the full screen even when camera is bounds-clamped
+    const fogW = Math.max(this.scale.width, this.scale.height) * 2 + FOG_RADIUS * 2;
+    const fogDim = Math.min(fogW, 6000);
+    const fogTex = this.textures.createCanvas('fogTex', fogDim, fogDim);
     const ctx = fogTex!.getContext();
-    const cx = FOG_SIZE / 2;
-    const cy = FOG_SIZE / 2;
+    const fcx = fogDim / 2;
+    const fcy = fogDim / 2;
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
-    ctx.fillRect(0, 0, FOG_SIZE, FOG_SIZE);
+    ctx.fillStyle = `rgba(0, 0, 0, ${FOG_ALPHA})`;
+    ctx.fillRect(0, 0, fogDim, fogDim);
 
     ctx.globalCompositeOperation = 'destination-out';
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, FOG_RADIUS);
+    const grad = ctx.createRadialGradient(fcx, fcy, 0, fcx, fcy, FOG_RADIUS);
     grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
     grad.addColorStop(0.3, 'rgba(0, 0, 0, 0.98)');
     grad.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
@@ -180,7 +170,7 @@ export class MainScene extends Phaser.Scene {
     grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(cx, cy, FOG_RADIUS, 0, Math.PI * 2);
+    ctx.arc(fcx, fcy, FOG_RADIUS, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.globalCompositeOperation = 'source-over';
@@ -201,14 +191,12 @@ export class MainScene extends Phaser.Scene {
     this.minimapCam.setZoom(mmSize / Math.max(mapW, mapH));
     this.minimapCam.setVisible(false);
 
-    // Red border around minimap (screen-fixed)
     this.minimapBorder = this.add.graphics();
     this.minimapBorder.setDepth(2000);
     this.minimapBorder.setScrollFactor(0);
     this.minimapBorder.setVisible(false);
     this.drawMinimapBorder(mmX, mmY, mmSize, mmPad);
 
-    // Hide fog and minimap border from minimap camera
     this.fogSprite.cameraFilter |= this.minimapCam.id;
     this.minimapBorder.cameraFilter |= this.minimapCam.id;
   }
@@ -273,11 +261,9 @@ export class MainScene extends Phaser.Scene {
       }
 
       if (isLocal(key)) {
-        // Client-side prediction: move sprite based on current input
         const speed = p.isZombie ? LOCAL_ZOMBIE_SPEED : LOCAL_SPEED;
         const predX = rect.x + dirX * speed * dt;
         const predY = rect.y + dirY * speed * dt;
-        // Blend prediction with server position
         const clampedX = Math.max(0, Math.min(mapW, predX));
         const clampedY = Math.max(0, Math.min(mapH, predY));
         rect.x = Phaser.Math.Linear(clampedX, p.x, LOCAL_LERP);
@@ -299,7 +285,6 @@ export class MainScene extends Phaser.Scene {
     const localPlayer = this.localIdentityHex ? players.find((p) => p.identity.toHexString() === this.localIdentityHex) : null;
     const localSprite = this.localIdentityHex ? this.playerSprites.get(this.localIdentityHex) : null;
     if (localPlayer && localSprite) {
-      // Camera follows the interpolated sprite, not the raw server position
       this.cameras.main.centerOn(localSprite.x, localSprite.y);
       const isZombie = localPlayer.isZombie;
       this.minimapCam.setVisible(isZombie);

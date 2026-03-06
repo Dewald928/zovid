@@ -11,6 +11,7 @@ const LERP = 0.3;
 const LOCAL_LERP = 0.5;
 const LOCAL_SPEED = 200;
 const LOCAL_ZOMBIE_SPEED = 140;
+const LOCAL_ZOMBIE_SPEED_BOOST = 220;
 const ARENA_FILL = 0x1a3320;
 const ARENA_BORDER = 0x2a5530;
 const GRID_COLOR = 0x224428;
@@ -201,8 +202,11 @@ export class MainScene extends Phaser.Scene {
         D: Phaser.Input.Keyboard.Key;
       };
       this.registry.set('moveKeys', keys);
+      const spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+      this.registry.set('abilityKey', spaceKey);
     } else {
       this.registry.set('moveKeys', null);
+      this.registry.set('abilityKey', null);
     }
 
     // Fog sprite: dark everywhere with gradient vision hole in center
@@ -330,6 +334,19 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
+    const abilityKey = this.registry.get('abilityKey') as Phaser.Input.Keyboard.Key | null;
+    const me = this.localIdentityHex
+      ? players.find((p) => p.identity.toHexString() === this.localIdentityHex)
+      : null;
+    if (
+      conn &&
+      me?.isZombie &&
+      config?.roundActive &&
+      (abilityKey as { justDown?: boolean })?.justDown
+    ) {
+      conn.reducers.useZombieAbility({});
+    }
+
     const dt = _delta / 1000;
     const seen = new Set<string>();
     const isLocal = (key: string) => key === this.localIdentityHex;
@@ -345,7 +362,12 @@ export class MainScene extends Phaser.Scene {
       }
 
       if (isLocal(key)) {
-        const speed = p.isZombie ? LOCAL_ZOMBIE_SPEED : LOCAL_SPEED;
+        const nowMicros = BigInt(Date.now()) * 1000n;
+        const zombieSpeed =
+          p.isZombie && p.speedBoostUntilMicros > nowMicros
+            ? LOCAL_ZOMBIE_SPEED_BOOST
+            : LOCAL_ZOMBIE_SPEED;
+        const speed = p.isZombie ? zombieSpeed : LOCAL_SPEED;
         const predX = rect.x + dirX * speed * dt;
         const predY = rect.y + dirY * speed * dt;
         const clampedX = Math.max(0, Math.min(mapW, predX));

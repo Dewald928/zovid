@@ -35,6 +35,54 @@
   padding: 1rem;
 }
 
+/* Zombie ability bar — left side, vertical, depletes on use and charges over cooldown */
+.hud-ability-bar-wrap {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+.hud-ability-bar-track {
+  width: 20px;
+  height: 160px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.hud-ability-bar-fill {
+  width: 100%;
+  min-height: 4px;
+  background: linear-gradient(to top, #2a8a2a, #44ff44);
+  border-radius: 6px;
+  transition: height 0.15s ease-out;
+}
+.hud-ability-bar-fill-boost {
+  background: linear-gradient(to top, #1a5a1a, #66ff66);
+  box-shadow: 0 0 10px rgba(68, 255, 68, 0.6);
+}
+.hud-ability-bar-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #44ff44;
+  text-shadow: 0 0 6px #44ff44;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.hud-ability-bar-key {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
 .hud-stats {
   display: flex;
   gap: 1.5rem;

@@ -19,6 +19,7 @@ export const GameConfig = __t.object("GameConfig", {
   lastTickMicros: __t.u64(),
   mapWidth: __t.f64(),
   mapHeight: __t.f64(),
+  roundWinner: __t.option(__t.string()),
 });
 export type GameConfig = __Infer<typeof GameConfig>;
 
@@ -42,6 +43,8 @@ export const Player = __t.object("Player", {
   isZombie: __t.bool(),
   name: __t.string(),
   score: __t.u64(),
+  speedBoostUntilMicros: __t.u64(),
+  abilityCooldownUntilMicros: __t.u64(),
 });
 export type Player = __Infer<typeof Player>;
 

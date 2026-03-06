@@ -5,6 +5,9 @@ import type { DbConnection } from '../module_bindings';
 import { DonationPanel } from './DonationPanel';
 
 const ROUND_RESET_DELAY_MICROS = 10_000_000n; // 10 seconds
+const ROUND_DURATION_MICROS = 5n * 60n * 1_000_000n; // 5 minutes
+const ZOMBIE_ABILITY_COOLDOWN_MICROS = 15n * 1_000_000n; // 15 seconds (match server)
+const ZOMBIE_BOOST_DURATION_MICROS = 3n * 1_000_000n; // 3 seconds (match server)
 
 interface HUDProps {
   players: Player[];
@@ -36,8 +39,18 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
     ? Number(nowMicros - config.roundStartMicros) / 1000
     : 0;
   const roundElapsedSec = Math.max(0, Math.floor(roundElapsedMs / 1000));
+  const roundDurationMs = Number(ROUND_DURATION_MICROS) / 1000;
+  const roundRemainingMs = roundActive
+    ? Math.max(0, roundDurationMs - roundElapsedMs)
+    : 0;
+  const roundRemainingSec = Math.ceil(roundRemainingMs / 1000);
+  const timeLeftMin = Math.floor(roundRemainingSec / 60);
+  const timeLeftSec = roundRemainingSec % 60;
+  const timeLeftStr = `${timeLeftMin}:${String(timeLeftSec).padStart(2, '0')}`;
 
-  const showScoreboard = !roundActive && humanCount === 0 && zombieCount > 0;
+  const roundWinner = config?.roundWinner;
+  const showScoreboard =
+    !roundActive && (roundWinner === 'zombies' || roundWinner === 'humans');
   const sortedByScore = [...players].sort((a, b) => Number(b.score - a.score));
 
   const nextRoundMicros =
@@ -89,12 +102,57 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
     if (e.key === 'Escape') setIsEditingName(false);
   };
 
+  const boostActive =
+    isZombie &&
+    localPlayer &&
+    localPlayer.speedBoostUntilMicros > nowMicros;
+
+  const abilityBarFill =
+    isZombie && roundActive && localPlayer
+      ? boostActive
+        ? Math.max(
+            0,
+            Math.min(
+              1,
+              Number(localPlayer.speedBoostUntilMicros - nowMicros) /
+                Number(ZOMBIE_BOOST_DURATION_MICROS)
+            )
+          )
+        : Number(localPlayer.abilityCooldownUntilMicros) <= Number(nowMicros)
+          ? 1
+          : Math.max(
+              0,
+              Math.min(
+                1,
+                Number(
+                  nowMicros -
+                    (localPlayer.abilityCooldownUntilMicros -
+                      ZOMBIE_ABILITY_COOLDOWN_MICROS)
+                ) / Number(ZOMBIE_ABILITY_COOLDOWN_MICROS)
+              )
+            )
+      : 0;
+
   return (
     <div className="hud">
+      {isZombie && roundActive && (
+        <div className="hud-ability-bar-wrap" aria-label="Ability charge">
+          <div className="hud-ability-bar-track">
+            <div
+              className={`hud-ability-bar-fill ${boostActive ? 'hud-ability-bar-fill-boost' : ''}`}
+              style={{ height: `${abilityBarFill * 100}%` }}
+            />
+          </div>
+          <span className="hud-ability-bar-label">Speed</span>
+          <span className="hud-ability-bar-key">(Space)</span>
+        </div>
+      )}
       <div className="hud-stats">
         <span className="hud-stat">Humans: {humanCount}</span>
         <span className="hud-stat">Zombies: {zombieCount}</span>
-        <span className="hud-stat">Round timer: {roundElapsedSec}s</span>
+        <span className="hud-stat">
+          {roundActive ? `Time left: ${timeLeftStr}` : `Round timer: ${roundElapsedSec}s`}
+        </span>
       </div>
       <div className={`hud-role ${isZombie ? 'zombie' : 'human'}`}>
         {isZombie ? (
@@ -136,7 +194,9 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
 
       {showScoreboard && (
         <div className="hud-scoreboard">
-          <h2>Round Over - Zombies Win!</h2>
+          <h2>
+            Round Over - {roundWinner === 'humans' ? 'Humans Win!' : 'Zombies Win!'}
+          </h2>
           <p>Next round in {countdownSec} seconds...</p>
           <ol className="hud-leaderboard">
             {sortedByScore.slice(0, 10).map((p) => (

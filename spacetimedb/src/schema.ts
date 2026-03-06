@@ -14,6 +14,8 @@ export const Player = table(
     isZombie: t.bool(),
     name: t.string(),
     score: t.u64(),
+    speedBoostUntilMicros: t.u64(),
+    abilityCooldownUntilMicros: t.u64(),
   }
 );
 
@@ -31,6 +33,7 @@ export const GameConfig = table(
     lastTickMicros: t.u64(),
     mapWidth: t.f64(),
     mapHeight: t.f64(),
+    roundWinner: t.string().optional(),
   }
 );
 

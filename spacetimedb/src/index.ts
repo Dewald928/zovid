@@ -7,6 +7,10 @@ const ZOMBIE_SPEED = 140.0;
 const INFECTION_RADIUS = 40.0;
 const TICK_MICROS = 50_000n; // 50ms
 const ROUND_RESET_DELAY_MICROS = 10_000_000n; // 10 seconds
+const ROUND_DURATION_MICROS = 5n * 60n * 1_000_000n; // 5 minutes
+const ZOMBIE_SPEED_BOOST = 220.0;
+const ZOMBIE_BOOST_DURATION_MICROS = 3n * 1_000_000n; // 3 seconds
+const ZOMBIE_ABILITY_COOLDOWN_MICROS = 15n * 1_000_000n; // 15 seconds
 const BASE_MAP_SIZE = 2000.0;
 const MIN_PLAYERS_TO_START = 1;
 const TICK_DT_SEC = Number(TICK_MICROS) / 1_000_000;
@@ -246,6 +250,8 @@ export const tick = spacetimedb.reducer((ctx) => {
         dirY: 0,
         isZombie: i === firstIdx,
         score: 0n,
+        speedBoostUntilMicros: 0n,
+        abilityCooldownUntilMicros: 0n,
       });
     }
     ctx.db.GameConfig.id.update({
@@ -255,6 +261,7 @@ export const tick = spacetimedb.reducer((ctx) => {
       roundStartMicros: now,
       roundEndMicros: 0n,
       lastTickMicros: now,
+      roundWinner: undefined,
     });
     return;
   }
@@ -272,7 +279,12 @@ export const tick = spacetimedb.reducer((ctx) => {
       const newRoundNum = config.roundNumber + 1n;
       generateAllObstacles(ctx, newRoundNum, config.mapWidth, config.mapHeight);
       for (const p of players) {
-        ctx.db.Player.identity.update({ ...p, score: 0n });
+        ctx.db.Player.identity.update({
+          ...p,
+          score: 0n,
+          speedBoostUntilMicros: 0n,
+          abilityCooldownUntilMicros: 0n,
+        });
       }
       ctx.db.GameConfig.id.update({
         ...config,
@@ -280,6 +292,7 @@ export const tick = spacetimedb.reducer((ctx) => {
         roundNumber: newRoundNum,
         roundStartMicros: now,
         lastTickMicros: now,
+        roundWinner: undefined,
       });
     }
     return;
@@ -293,7 +306,9 @@ export const tick = spacetimedb.reducer((ctx) => {
   // Move all players (with obstacle collision and axis-sliding)
   for (const p of ctx.db.Player.iter()) {
     const { x: dx, y: dy } = normalizeDir(p.dirX, p.dirY);
-    const speed = p.isZombie ? ZOMBIE_SPEED : HUMAN_SPEED;
+    const zombieSpeed =
+      p.isZombie && now < p.speedBoostUntilMicros ? ZOMBIE_SPEED_BOOST : ZOMBIE_SPEED;
+    const speed = p.isZombie ? zombieSpeed : HUMAN_SPEED;
     let nx = p.x + dx * speed * TICK_DT_SEC;
     let ny = p.y + dy * speed * TICK_DT_SEC;
     nx = Math.max(0, Math.min(mapW, nx));
@@ -339,14 +354,24 @@ export const tick = spacetimedb.reducer((ctx) => {
     }
   }
 
-  // Round end when 0 humans (but only if there are 2+ players — solo player can free-roam)
+  // Round end: timer expiry (humans win) or 0 humans (zombies win)
   const allPlayers = [...ctx.db.Player.iter()];
   const humansLeft = allPlayers.filter((p) => !p.isZombie);
-  if (humansLeft.length === 0 && allPlayers.length >= 2) {
+  const timerExpired = now - cfg.roundStartMicros >= ROUND_DURATION_MICROS;
+
+  if (timerExpired && humansLeft.length >= 1) {
     ctx.db.GameConfig.id.update({
       ...cfg,
       roundActive: false,
       roundEndMicros: now,
+      roundWinner: 'humans',
+    });
+  } else if (humansLeft.length === 0 && allPlayers.length >= 2) {
+    ctx.db.GameConfig.id.update({
+      ...cfg,
+      roundActive: false,
+      roundEndMicros: now,
+      roundWinner: 'zombies',
     });
   }
 });
@@ -361,6 +386,20 @@ export const set_input = spacetimedb.reducer(
     ctx.db.Player.identity.update({ ...player, dirX: x, dirY: y });
   }
 );
+
+export const use_zombie_ability = spacetimedb.reducer((ctx) => {
+  const config = ctx.db.GameConfig.id.find(0n);
+  if (!config?.roundActive) return;
+  const player = ctx.db.Player.identity.find(ctx.sender);
+  if (!player || !player.isZombie) return;
+  const now = ctx.timestamp.microsSinceUnixEpoch;
+  if (now <= player.abilityCooldownUntilMicros) return;
+  ctx.db.Player.identity.update({
+    ...player,
+    speedBoostUntilMicros: now + ZOMBIE_BOOST_DURATION_MICROS,
+    abilityCooldownUntilMicros: now + ZOMBIE_ABILITY_COOLDOWN_MICROS,
+  });
+});
 
 export const set_name = spacetimedb.reducer({ name: t.string() }, (ctx, { name }) => {
   const player = ctx.db.Player.identity.find(ctx.sender);
@@ -392,6 +431,7 @@ export const init = spacetimedb.init((ctx) => {
       lastTickMicros: 0n,
       mapWidth: BASE_MAP_SIZE,
       mapHeight: BASE_MAP_SIZE,
+      roundWinner: undefined,
     });
   }
 });
@@ -423,6 +463,8 @@ export const onConnect = spacetimedb.clientConnected((ctx) => {
     isZombie: isFirst,
     name: 'Player',
     score: 0n,
+    speedBoostUntilMicros: 0n,
+    abilityCooldownUntilMicros: 0n,
   });
 
   const count = [...ctx.db.Player.iter()].length;

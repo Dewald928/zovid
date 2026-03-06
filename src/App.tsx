@@ -12,12 +12,18 @@ function App() {
   const connection = getConnection() as DbConnection | null;
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const spaceKeyDownRef = useRef(false);
 
   const [players] = useTable(tables.Player);
   const [configRows] = useTable(tables.GameConfig);
   const [obstacles] = useTable(tables.Obstacle);
 
   const config = configRows.length > 0 ? configRows[0] : null;
+  const localPlayer = identity
+    ? (players ?? []).find((p) => p.identity.toHexString() === identity.toHexString())
+    : null;
+  const isZombie = localPlayer?.isZombie ?? false;
+  const roundActive = config?.roundActive ?? false;
 
   useEffect(() => {
     if (!connection) {
@@ -64,6 +70,27 @@ function App() {
   useEffect(() => {
     setLocalIdentity(identity ? identity.toHexString() : null);
   }, [identity]);
+
+  // Global Space key: trigger zombie ability (works even when canvas doesn't have focus)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (!connection || !isZombie || !roundActive) return;
+      if (spaceKeyDownRef.current) return; // avoid repeat while key held
+      spaceKeyDownRef.current = true;
+      e.preventDefault();
+      connection.reducers.useZombieAbility({});
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' || e.key === ' ') spaceKeyDownRef.current = false;
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [connection, isZombie, roundActive]);
 
   if (!isActive) {
     return (

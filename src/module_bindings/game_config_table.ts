@@ -19,4 +19,5 @@ export default __t.row({
   lastTickMicros: __t.u64().name("last_tick_micros"),
   mapWidth: __t.f64().name("map_width"),
   mapHeight: __t.f64().name("map_height"),
+  roundWinner: __t.option(__t.string()).name("round_winner"),
 });

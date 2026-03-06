@@ -37,6 +37,7 @@ import {
 import SetInputReducer from "./set_input_reducer";
 import SetNameReducer from "./set_name_reducer";
 import TickReducer from "./tick_reducer";
+import UseZombieAbilityReducer from "./use_zombie_ability_reducer";
 
 // Import all procedure arg schemas
 
@@ -89,6 +90,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_input", SetInputReducer),
   __reducerSchema("set_name", SetNameReducer),
   __reducerSchema("tick", TickReducer),
+  __reducerSchema("use_zombie_ability", UseZombieAbilityReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

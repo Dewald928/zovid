@@ -9,8 +9,10 @@ import { type Infer as __Infer } from "spacetimedb";
 import SetInputReducer from "../set_input_reducer";
 import SetNameReducer from "../set_name_reducer";
 import TickReducer from "../tick_reducer";
+import UseZombieAbilityReducer from "../use_zombie_ability_reducer";
 
 export type SetInputParams = __Infer<typeof SetInputReducer>;
 export type SetNameParams = __Infer<typeof SetNameReducer>;
 export type TickParams = __Infer<typeof TickReducer>;
+export type UseZombieAbilityParams = __Infer<typeof UseZombieAbilityReducer>;
 

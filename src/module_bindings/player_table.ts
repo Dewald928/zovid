@@ -19,4 +19,6 @@ export default __t.row({
   isZombie: __t.bool().name("is_zombie"),
   name: __t.string(),
   score: __t.u64(),
+  speedBoostUntilMicros: __t.u64().name("speed_boost_until_micros"),
+  abilityCooldownUntilMicros: __t.u64().name("ability_cooldown_until_micros"),
 });

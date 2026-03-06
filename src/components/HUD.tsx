@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Player, GameConfig } from '../module_bindings/types';
 import type { Identity } from 'spacetimedb';
 import type { DbConnection } from '../module_bindings';
+import { DonationPanel } from './DonationPanel';
 
 const ROUND_RESET_DELAY_MICROS = 10_000_000n; // 10 seconds
 
@@ -96,7 +97,17 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
         <span className="hud-stat">Round timer: {roundElapsedSec}s</span>
       </div>
       <div className={`hud-role ${isZombie ? 'zombie' : 'human'}`}>
-        {isZombie ? 'YOU ARE A ZOMBIE' : 'YOU ARE A HUMAN'}
+        {isZombie ? (
+          <>
+            YOU ARE A ZOMBIE
+            <span className="hud-role-tagline">Eat humans!</span>
+          </>
+        ) : (
+          <>
+            YOU ARE A HUMAN
+            <span className="hud-role-tagline">Run! Don't turn green</span>
+          </>
+        )}
       </div>
 
       <div className="hud-name">
@@ -136,6 +147,8 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
           </ol>
         </div>
       )}
+
+      <DonationPanel />
     </div>
   );
 }

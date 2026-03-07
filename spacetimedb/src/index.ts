@@ -208,6 +208,9 @@ function generateAllObstacles(
 const spacetimedb = schema({ Player, GameConfig, Obstacle });
 export default spacetimedb;
 
+// ─── ping: no-op procedure for client connection RTT measurement ─
+export const ping = spacetimedb.procedure(t.unit(), () => ({}));
+
 // ─── tick: game loop (call from client every ~50ms; server throttles to 50ms) ─
 export const tick = spacetimedb.reducer((ctx) => {
   const config = ctx.db.GameConfig.id.find(0n);

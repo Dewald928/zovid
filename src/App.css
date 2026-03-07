@@ -158,6 +158,24 @@
   font-weight: 600;
 }
 
+/* Ping (RTT) — bottom-left, desktop only */
+.hud-ping {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 0 4px #000, 0 1px 2px #000;
+  display: none;
+}
+
+@media (min-width: 769px) {
+  .hud-ping {
+    display: block;
+  }
+}
+
 .hud-role {
   margin-top: 0.5rem;
   font-size: 1rem;

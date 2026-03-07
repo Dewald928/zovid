@@ -40,6 +40,7 @@ import TickReducer from "./tick_reducer";
 import UseZombieAbilityReducer from "./use_zombie_ability_reducer";
 
 // Import all procedure arg schemas
+import * as PingProcedure from "./ping_procedure";
 
 // Import all table schema definitions
 import GameConfigRow from "./game_config_table";
@@ -95,6 +96,7 @@ const reducersSchema = __reducers(
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
 const proceduresSchema = __procedures(
+  __procedureSchema("ping", PingProcedure.params, PingProcedure.returnType),
 );
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */

@@ -14,6 +14,7 @@ interface HUDProps {
   config: GameConfig | null;
   localIdentity?: Identity;
   connection: DbConnection | null;
+  pingMs?: number | null;
 }
 
 /** Micros for display; updates every frame when ability bar is shown so charge/discharge is smooth. */
@@ -32,7 +33,7 @@ function useDisplayTimeMicros(active: boolean) {
   return displayMicros;
 }
 
-export function HUD({ players, config, localIdentity, connection }: HUDProps) {
+export function HUD({ players, config, localIdentity, connection, pingMs = null }: HUDProps) {
   const [tick, setTick] = useState(0);
   const [nameInput, setNameInput] = useState('');
   const [nameError, setNameError] = useState('');
@@ -255,6 +256,12 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
       )}
 
       <DonationPanel />
+
+      {pingMs != null && (
+        <div className="hud-ping" aria-label={`Network latency ${pingMs} ms`}>
+          {pingMs} ms
+        </div>
+      )}
     </div>
   );
 }

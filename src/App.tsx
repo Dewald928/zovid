@@ -19,6 +19,8 @@ function App() {
   const [configRows] = useTable(tables.GameConfig);
   const [obstacles] = useTable(tables.Obstacle);
 
+  const [pingMs, setPingMs] = React.useState<number | null>(null);
+
   const config = configRows.length > 0 ? configRows[0] : null;
   const localPlayer = identity
     ? (players ?? []).find((p) => p.identity.toHexString() === identity.toHexString())
@@ -41,6 +43,22 @@ function App() {
     const interval = setInterval(() => {
       connection.reducers.tick({});
     }, 50);
+    return () => clearInterval(interval);
+  }, [connection]);
+
+  // Server connection ping (RTT) via no-op procedure, every 2s
+  useEffect(() => {
+    if (!connection) return;
+    const runPing = () => {
+      const start = Date.now();
+      connection.procedures.ping({}).then(() => {
+        setPingMs(Math.round(Date.now() - start));
+      }).catch(() => {
+        setPingMs(null);
+      });
+    };
+    runPing();
+    const interval = setInterval(runPing, 2000);
     return () => clearInterval(interval);
   }, [connection]);
 
@@ -125,7 +143,7 @@ function App() {
   return (
     <div className="app">
       <div ref={containerRef} id="phaser-game" className="app-game" />
-      <HUD players={players ? [...players] : []} config={config} localIdentity={identity ?? undefined} connection={connection ?? null} />
+      <HUD players={players ? [...players] : []} config={config} localIdentity={identity ?? undefined} connection={connection ?? null} pingMs={pingMs} />
     </div>
   );
 }

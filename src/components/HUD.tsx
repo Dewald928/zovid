@@ -5,7 +5,7 @@ import type { DbConnection } from '../module_bindings';
 import { DonationPanel } from './DonationPanel';
 
 const ROUND_RESET_DELAY_MICROS = 10_000_000n; // 10 seconds
-const ROUND_DURATION_MICROS = 5n * 60n * 1_000_000n; // 5 minutes
+const ROUND_DURATION_MICROS = 3n * 60n * 1_000_000n; // 3 minutes
 
 const BOOST_DURATION_MS = 3_000;
 const COOLDOWN_DURATION_MS = 15_000;

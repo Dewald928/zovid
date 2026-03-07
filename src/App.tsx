@@ -12,6 +12,7 @@ function App() {
   const connection = getConnection() as DbConnection | null;
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
   const spaceKeyDownRef = useRef(false);
 
   const [players] = useTable(tables.Player);
@@ -53,15 +54,36 @@ function App() {
 
   useEffect(() => {
     if (!containerRef.current || !isActive) return;
-    // Wait one frame so the container has layout and dimensions
+    const container = containerRef.current;
+    // Wait one frame so the container has layout and dimensions (100dvh etc.)
     const id = requestAnimationFrame(() => {
       const el = document.getElementById('phaser-game');
       if (!el) return;
-      const config = createGameConfig('phaser-game');
+      const w = container.clientWidth || window.innerWidth;
+      const h = container.clientHeight || window.innerHeight;
+      const config = createGameConfig('phaser-game', w, h);
       gameRef.current = new Phaser.Game(config);
+
+      // Keep canvas in sync with container (fixes mobile: URL bar, orientation, safe area)
+      const game = gameRef.current;
+      const resize = () => {
+        const cw = container.clientWidth || window.innerWidth;
+        const ch = container.clientHeight || window.innerHeight;
+        if (cw > 0 && ch > 0 && game.scale) game.scale.resize(cw, ch);
+      };
+      const vv = window.visualViewport;
+      window.addEventListener('resize', resize);
+      if (vv) vv.addEventListener('resize', resize);
+      resizeCleanupRef.current = () => {
+        window.removeEventListener('resize', resize);
+        if (vv) vv.removeEventListener('resize', resize);
+        resizeCleanupRef.current = null;
+      };
+      resize();
     });
     return () => {
       cancelAnimationFrame(id);
+      resizeCleanupRef.current?.();
       gameRef.current?.destroy(true);
       gameRef.current = null;
     };

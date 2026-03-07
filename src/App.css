@@ -1,7 +1,10 @@
+/* Use dynamic viewport height on mobile so content (game + HUD) fits the visible screen.
+   Fallback to 100vh for older browsers that don't support dvh. */
 .app {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 

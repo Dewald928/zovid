@@ -1,12 +1,19 @@
 import Phaser from 'phaser';
 import { MainScene } from './scenes/MainScene';
 
-export function createGameConfig(parent: string): Phaser.Types.Core.GameConfig {
+/** Game size from container so camera/viewport match the visible area (avoids mobile mismatch). */
+export function createGameConfig(
+  parent: string,
+  width?: number,
+  height?: number
+): Phaser.Types.Core.GameConfig {
+  const w = width ?? window.innerWidth;
+  const h = height ?? window.innerHeight;
   return {
     type: Phaser.AUTO,
     parent,
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: w,
+    height: h,
     backgroundColor: '#0f1f14',
     scene: [MainScene],
     scale: {

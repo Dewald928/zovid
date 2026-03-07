@@ -267,7 +267,30 @@ export class MainScene extends Phaser.Scene {
 
     if (VirtualJoystick.isTouchDevice()) {
       this.joystick = new VirtualJoystick(this);
+      this.setupTouchBoostZone();
     }
+  }
+
+  /** Bottom-left screen zone for boost on touch devices; works with joystick (bottom-right) for multi-touch. */
+  private setupTouchBoostZone(): void {
+    this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+      if (!this.isInBoostZone(ptr)) return;
+      const conn = getConnection();
+      const { players, config } = getGameState();
+      const me = this.localIdentityHex
+        ? players.find((p) => p.identity.toHexString() === this.localIdentityHex)
+        : null;
+      if (!conn || !me?.isZombie || !config?.roundActive) return;
+      const nowMicros = BigInt(Date.now()) * 1000n;
+      if (me.abilityCooldownUntilMicros > nowMicros) return;
+      conn.reducers.useZombieAbility({});
+    });
+  }
+
+  private isInBoostZone(ptr: Phaser.Input.Pointer): boolean {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    return ptr.x < w * 0.5 && ptr.y > h * 0.5;
   }
 
   update(_time: number, _delta: number): void {

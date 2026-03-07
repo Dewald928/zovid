@@ -139,6 +139,11 @@
   .hud-ability-bar-key {
     display: none;
   }
+  /* Let touches pass through to canvas so joystick + boost work together (multi-touch on same surface) */
+  .hud-ability-bar-wrap,
+  .hud-ability-bar-wrap .hud-ability-btn {
+    pointer-events: none;
+  }
 }
 
 .hud-stats {

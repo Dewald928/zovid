@@ -16,11 +16,28 @@ interface HUDProps {
   connection: DbConnection | null;
 }
 
+/** Micros for display; updates every frame when ability bar is shown so charge/discharge is smooth. */
+function useDisplayTimeMicros(active: boolean) {
+  const [displayMicros, setDisplayMicros] = useState(() => BigInt(Date.now()) * 1000n);
+  useEffect(() => {
+    if (!active) return;
+    let rafId: number;
+    const tick = () => {
+      setDisplayMicros(BigInt(Date.now()) * 1000n);
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [active]);
+  return displayMicros;
+}
+
 export function HUD({ players, config, localIdentity, connection }: HUDProps) {
   const [tick, setTick] = useState(0);
   const [nameInput, setNameInput] = useState('');
   const [nameError, setNameError] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
+  const [optimisticBoostEndMicros, setOptimisticBoostEndMicros] = useState<bigint | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const humans = players.filter((p) => !p.isZombie);
   const zombies = players.filter((p) => p.isZombie);
@@ -34,7 +51,18 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
   const currentName = localPlayer?.name ?? 'Player';
   const roundActive = config?.roundActive ?? false;
 
-  const nowMicros = BigInt(Date.now()) * 1000n;
+  const showAbilityBar = isZombie && roundActive;
+  const displayMicros = useDisplayTimeMicros(showAbilityBar);
+  const nowMicros = showAbilityBar ? displayMicros : BigInt(Date.now()) * 1000n;
+
+  // Prefer server boost end when available; otherwise use optimistic so bar starts draining on click
+  const serverBoostEnd = localPlayer && localPlayer.speedBoostUntilMicros > nowMicros ? localPlayer.speedBoostUntilMicros : null;
+  const optimisticStillActive = optimisticBoostEndMicros != null && optimisticBoostEndMicros > nowMicros;
+  const effectiveBoostEndMicros = serverBoostEnd ?? (optimisticStillActive ? optimisticBoostEndMicros : null);
+  useEffect(() => {
+    if (localPlayer && localPlayer.speedBoostUntilMicros > BigInt(Date.now()) * 1000n) setOptimisticBoostEndMicros(null);
+  }, [localPlayer?.speedBoostUntilMicros]);
+
   const roundElapsedMs = config?.roundStartMicros
     ? Number(nowMicros - config.roundStartMicros) / 1000
     : 0;
@@ -102,10 +130,7 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
     if (e.key === 'Escape') setIsEditingName(false);
   };
 
-  const boostActive =
-    isZombie &&
-    localPlayer &&
-    localPlayer.speedBoostUntilMicros > nowMicros;
+  const boostActive = isZombie && effectiveBoostEndMicros != null;
 
   const abilityReady =
     isZombie &&
@@ -114,12 +139,12 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
 
   const abilityBarFill =
     isZombie && roundActive && localPlayer
-      ? boostActive
+      ? boostActive && effectiveBoostEndMicros != null
         ? Math.max(
             0,
             Math.min(
               1,
-              Number(localPlayer.speedBoostUntilMicros - nowMicros) /
+              Number(effectiveBoostEndMicros - nowMicros) /
                 Number(ZOMBIE_BOOST_DURATION_MICROS)
             )
           )
@@ -138,6 +163,13 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
             )
       : 0;
 
+  const handleBoostClick = () => {
+    if (!connection || !abilityReady) return;
+    const clickMicros = BigInt(Date.now()) * 1000n;
+    setOptimisticBoostEndMicros(clickMicros + ZOMBIE_BOOST_DURATION_MICROS);
+    connection.reducers.useZombieAbility({});
+  };
+
   return (
     <div className="hud">
       {isZombie && roundActive && (
@@ -154,7 +186,7 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
             type="button"
             className={`hud-ability-btn ${abilityReady ? '' : 'hud-ability-btn-cooldown'}`}
             disabled={!abilityReady}
-            onClick={() => connection?.reducers.useZombieAbility({})}
+            onClick={handleBoostClick}
             aria-label="Use speed boost"
           >
             Boost

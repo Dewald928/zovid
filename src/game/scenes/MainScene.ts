@@ -12,6 +12,8 @@ const LOCAL_LERP = 0.5;
 const LOCAL_SPEED = 200;
 const LOCAL_ZOMBIE_SPEED = 140;
 const LOCAL_ZOMBIE_SPEED_BOOST = 220;
+const ZOMBIE_BOOST_GLOW_SIZE = 44; // PLAYER_SIZE + 12
+const ZOMBIE_BOOST_GLOW_COLOR = 0x44ff88;
 const ARENA_FILL = 0x1a3320;
 const ARENA_BORDER = 0x2a5530;
 const GRID_COLOR = 0x224428;
@@ -29,6 +31,7 @@ const TREE_TRUNK = 0x4a3520;
 
 export class MainScene extends Phaser.Scene {
   private playerSprites!: Map<string, Phaser.GameObjects.Rectangle>;
+  private playerBoostGlows!: Map<string, Phaser.GameObjects.Rectangle>;
   private playerNames!: Map<string, Phaser.GameObjects.Text>;
   private fogSprite!: Phaser.GameObjects.Image;
   private arenaGraphics!: Phaser.GameObjects.Graphics;
@@ -178,6 +181,7 @@ export class MainScene extends Phaser.Scene {
 
   create(): void {
     this.playerSprites = new Map();
+    this.playerBoostGlows = new Map();
     this.playerNames = new Map();
     const mapW = 2000;
     const mapH = 2000;
@@ -348,6 +352,7 @@ export class MainScene extends Phaser.Scene {
     }
 
     const dt = _delta / 1000;
+    const nowMicros = BigInt(Date.now()) * 1000n;
     const seen = new Set<string>();
     const isLocal = (key: string) => key === this.localIdentityHex;
 
@@ -359,10 +364,13 @@ export class MainScene extends Phaser.Scene {
         rect = this.add.rectangle(p.x, p.y, PLAYER_SIZE, PLAYER_SIZE, p.isZombie ? ZOMBIE_COLOR : HUMAN_COLOR);
         rect.setDepth(100);
         this.playerSprites.set(key, rect);
+        const glow = this.add.rectangle(p.x, p.y, ZOMBIE_BOOST_GLOW_SIZE, ZOMBIE_BOOST_GLOW_SIZE, ZOMBIE_BOOST_GLOW_COLOR);
+        glow.setDepth(99);
+        glow.setVisible(false);
+        this.playerBoostGlows.set(key, glow);
       }
 
       if (isLocal(key)) {
-        const nowMicros = BigInt(Date.now()) * 1000n;
         const zombieSpeed =
           p.isZombie && p.speedBoostUntilMicros > nowMicros
             ? LOCAL_ZOMBIE_SPEED_BOOST
@@ -380,6 +388,15 @@ export class MainScene extends Phaser.Scene {
       }
       const color = isLocal(key) ? LOCAL_COLOR : p.isZombie ? ZOMBIE_COLOR : HUMAN_COLOR;
       rect.setFillStyle(color);
+
+      const boostActive = p.isZombie && p.speedBoostUntilMicros > nowMicros;
+      const glow = this.playerBoostGlows.get(key)!;
+      glow.setPosition(rect.x, rect.y);
+      glow.setVisible(boostActive);
+      if (boostActive) {
+        const pulse = 0.35 + 0.2 * Math.sin(this.time.now / 80);
+        glow.setAlpha(pulse);
+      }
 
       let nameText = this.playerNames.get(key);
       const displayName = p.name || 'Player';
@@ -406,6 +423,11 @@ export class MainScene extends Phaser.Scene {
       if (!seen.has(key)) {
         rect.destroy();
         this.playerSprites.delete(key);
+        const boostGlow = this.playerBoostGlows.get(key);
+        if (boostGlow) {
+          boostGlow.destroy();
+          this.playerBoostGlows.delete(key);
+        }
         const nameText = this.playerNames.get(key);
         if (nameText) {
           nameText.destroy();

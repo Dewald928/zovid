@@ -1,8 +1,72 @@
-# SpacetimeDB TypeScript Quickstart Chat
+# Zovid
 
-This is a simple chat application that demonstrates how to use SpacetimeDB with TypeScript and React. The chat application is a simple chat room where users can send messages to each other. The chat application uses SpacetimeDB to store the chat messages.
+The massive zombie plague survival game. Multiplayer game state and positions are synced via SpacetimeDB; proximity voice chat uses a self-hosted LiveKit server. The chat application is a simple chat room where users can send messages to each other. The chat application uses SpacetimeDB to store the chat messages.
 
 It is based directly on the plain React + TypeScript + Vite template. You can follow the quickstart guide for how creating this project from scratch at [SpacetimeDB TypeScript Quickstart](https://spacetimedb.com/docs/sdks/typescript/quickstart).
+
+## Proximity voice chat (self-hosted LiveKit)
+
+Humans hear nearby humans; zombies hear nearby zombies. Voice is handled by a **self-hosted LiveKit** server (no paid third-party service). The Vercel deployment only issues short-lived tokens via `POST /api/livekit-token`.
+
+### 1. Self-host LiveKit
+
+Run LiveKit yourself (e.g. on a VPS) using Docker:
+
+```bash
+docker run --rm -p 7880:7880 -p 7881:7881 -e LIVEKIT_KEYS="devkey: secret" livekit/livekit-server --dev
+```
+
+For production you need a config file with `port`, `rtc.port_range_start`/`port_range_end`, and `keys` (API key and secret). Put a reverse proxy (Caddy, Nginx) in front with TLS and proxy WebSocket to LiveKit’s port. See [LiveKit self-hosting](https://docs.livekit.io/transport/self-hosting/deployment/). Optionally run a TURN server (e.g. Coturn) for users behind strict NATs.
+
+### 2. Vercel environment variables
+
+In your Vercel project settings, set:
+
+- `LIVEKIT_URL` – Your LiveKit server URL (e.g. `wss://voice.yourdomain.com`).
+- `LIVEKIT_API_KEY` – API key from your LiveKit config.
+- `LIVEKIT_API_SECRET` – API secret from your LiveKit config.
+
+The token API uses these to sign tokens; no media runs on Vercel.
+
+### 3. Optional frontend env
+
+- `VITE_APP_URL` – Base URL for the app (e.g. `https://your-app.vercel.app`). If unset, the client uses `window.location.origin` for the token request (fine when the app and API share the same origin).
+
+### Testing locally
+
+1. **Start LiveKit** (Docker, dev mode with fixed key/secret):
+
+   ```bash
+   docker run --rm -p 7880:7880 -p 7881:7881 -e LIVEKIT_KEYS="devkey: secret" livekit/livekit-server --dev
+   ```
+
+2. **Env for the token API** – create `.env.local` (or set in shell) so the API can issue tokens:
+
+   ```bash
+   LIVEKIT_URL=ws://localhost:7880
+   LIVEKIT_API_KEY=devkey
+   LIVEKIT_API_SECRET=secret
+   ```
+
+3. **Run the app and API together** – plain `npm run dev` (Vite) does not serve `/api/livekit-token`. Use the Vercel CLI so the app and serverless function run on one origin:
+
+   ```bash
+   npx vercel dev
+   ```
+
+   Open the URL it prints (e.g. `http://localhost:3000`). Use HTTPS in production; for localhost most browsers allow microphone on `http://localhost`.
+
+4. **Test with two clients** – open two browser windows (or one normal + one incognito), join the game in both, start a round, and move the two players close together in the same team (both human or both zombie). You should hear the other when in range (~500 units).
+
+### Voice toggle and debugging
+
+- **Toggle** – Use the mic icon at the top-right to turn voice chat on or off (state is stored in `localStorage`).
+- **No sound?** – Open DevTools (F12) → Console. Then either: **(1)** In the **address bar**, add `?voice_debug=1` to the page URL (e.g. `http://localhost:3000/?voice_debug=1`) and press Enter; or **(2)** In the **console**, run `window.__ZOVID_VOICE_DEBUG = true` and reload the page. You’ll see periodic logs:
+  - **Recording**: `micEnabled`, `hasAudioPublication` – confirms the mic is captured and published.
+  - **Transmission**: `connectionState` (should be `connected`), `remoteCount` – confirms you’re in the room and see others.
+  - **Playback**: for each remote, `distance`, `volume`, `hasAudioTrack` – if `volume` is 0 or `hasAudioTrack` is false, you won’t hear them; move closer (under 500 units) or check that the other client has voice on and mic allowed.
+
+---
 
 You can follow the instructions for creating your own SpacetimeDB module here: [SpacetimeDB Rust Module Quickstart](https://spacetimedb.com/docs/modules/rust/quickstart). Place the module in the `quickstart-chat/server` directory for compability with this project.
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
 import { useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { DbConnection, tables } from './module_bindings';
@@ -6,6 +6,7 @@ import { setConnection, setGameState, setLocalIdentity } from './game/stdbBridge
 import { createGameConfig } from './game/config';
 import Phaser from 'phaser';
 import { HUD, fireBoostActivated } from './components/HUD';
+import { useProximityVoice } from './voice/useProximityVoice';
 
 function App() {
   const { getConnection, identity, isActive } = useSpacetimeDB();
@@ -20,6 +21,21 @@ function App() {
   const [obstacles] = useTable(tables.Obstacle);
 
   const [pingMs, setPingMs] = React.useState<number | null>(null);
+
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('zovid_voice_enabled') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('zovid_voice_enabled', String(voiceEnabled));
+    } catch {
+      /* ignore */
+    }
+  }, [voiceEnabled]);
 
   const config = configRows.length > 0 ? configRows[0] : null;
   const localPlayer = identity
@@ -111,6 +127,14 @@ function App() {
     setLocalIdentity(identity ? identity.toHexString() : null);
   }, [identity]);
 
+  const { startAudio } = useProximityVoice({
+    enabled: voiceEnabled && isActive && !!identity && !!localPlayer,
+    identity: identity ?? null,
+    isZombie,
+    players: players ? [...players] : [],
+    roundActive,
+  });
+
   // Global Space key: trigger zombie ability (works even when canvas doesn't have focus)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -141,10 +165,26 @@ function App() {
     );
   }
 
+  const handleVoiceToggle = () => {
+    setVoiceEnabled((v) => {
+      const next = !v;
+      if (next) startAudio();
+      return next;
+    });
+  };
+
   return (
     <div className="app">
       <div ref={containerRef} id="phaser-game" className="app-game" />
-      <HUD players={players ? [...players] : []} config={config} localIdentity={identity ?? undefined} connection={connection ?? null} pingMs={pingMs} />
+      <HUD
+        players={players ? [...players] : []}
+        config={config}
+        localIdentity={identity ?? undefined}
+        connection={connection ?? null}
+        pingMs={pingMs}
+        voiceEnabled={voiceEnabled}
+        onVoiceToggle={handleVoiceToggle}
+      />
     </div>
   );
 }

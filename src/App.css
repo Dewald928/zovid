@@ -105,7 +105,7 @@
   min-height: 4px;
   background: linear-gradient(to top, #2a8a2a, #44ff44);
   border-radius: 6px;
-  transition: height 0.15s ease-out;
+  /* No transition: height is driven every frame by rAF for smooth drain/charge */
 }
 .hud-ability-bar-fill-boost {
   background: linear-gradient(to top, #1a5a1a, #66ff66);

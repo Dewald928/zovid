@@ -22,6 +22,7 @@ export function createGameConfig(
     },
     input: {
       touch: true,
+      activePointers: 3,
     },
   };
 }

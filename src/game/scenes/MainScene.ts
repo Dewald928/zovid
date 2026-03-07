@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getConnection, getGameState, getLocalIdentity } from '../stdbBridge';
 import { VirtualJoystick } from '../VirtualJoystick';
+import { fireBoostActivated } from '../../components/HUD';
 
 const PLAYER_SIZE = 32;
 const HUMAN_COLOR = 0x4488ff;
@@ -268,29 +269,58 @@ export class MainScene extends Phaser.Scene {
     if (VirtualJoystick.isTouchDevice()) {
       this.joystick = new VirtualJoystick(this);
       this.setupTouchBoostZone();
+      this.setupNativeTouchBoostFallback();
     }
   }
 
   /** Bottom-left screen zone for boost on touch devices; works with joystick (bottom-right) for multi-touch. */
   private setupTouchBoostZone(): void {
     this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
-      if (!this.isInBoostZone(ptr)) return;
-      const conn = getConnection();
-      const { players, config } = getGameState();
-      const me = this.localIdentityHex
-        ? players.find((p) => p.identity.toHexString() === this.localIdentityHex)
-        : null;
-      if (!conn || !me?.isZombie || !config?.roundActive) return;
-      const nowMicros = BigInt(Date.now()) * 1000n;
-      if (me.abilityCooldownUntilMicros > nowMicros) return;
-      conn.reducers.useZombieAbility({});
+      if (!this.isInBoostZone(ptr.x, ptr.y)) return;
+      this.tryFireBoost();
     });
   }
 
-  private isInBoostZone(ptr: Phaser.Input.Pointer): boolean {
+  /** Native touchstart fallback so the second finger is always seen (some browsers don't give Phaser a second pointer). */
+  private setupNativeTouchBoostFallback(): void {
+    const canvas = this.sys.game.canvas;
+    const handler = (e: TouchEvent) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        const rect = canvas.getBoundingClientRect();
+        const scaleW = this.scale.width;
+        const scaleH = this.scale.height;
+        const x = ((t.clientX - rect.left) / rect.width) * scaleW;
+        const y = ((t.clientY - rect.top) / rect.height) * scaleH;
+        if (this.isInBoostZone(x, y)) {
+          this.tryFireBoost();
+          e.preventDefault();
+          break;
+        }
+      }
+    };
+    canvas.addEventListener('touchstart', handler, { passive: false });
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+      canvas.removeEventListener('touchstart', handler);
+    });
+  }
+
+  private tryFireBoost(): void {
+    const conn = getConnection();
+    const { players, config } = getGameState();
+    const localHex = getLocalIdentity();
+    const me = localHex ? players.find((p) => p.identity.toHexString() === localHex) : null;
+    if (!conn || !me?.isZombie || !config?.roundActive) return;
+    const nowMicros = BigInt(Date.now()) * 1000n;
+    if (me.abilityCooldownUntilMicros > nowMicros) return;
+    fireBoostActivated();
+    conn.reducers.useZombieAbility({});
+  }
+
+  private isInBoostZone(x: number, y: number): boolean {
     const w = this.scale.width;
     const h = this.scale.height;
-    return ptr.x < w * 0.5 && ptr.y > h * 0.5;
+    return x < w * 0.5 && y > h * 0.5;
   }
 
   update(_time: number, _delta: number): void {
@@ -371,6 +401,7 @@ export class MainScene extends Phaser.Scene {
       config?.roundActive &&
       (abilityKey as { justDown?: boolean })?.justDown
     ) {
+      fireBoostActivated();
       conn.reducers.useZombieAbility({});
     }
 

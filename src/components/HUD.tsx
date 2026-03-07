@@ -6,8 +6,10 @@ import { DonationPanel } from './DonationPanel';
 
 const ROUND_RESET_DELAY_MICROS = 10_000_000n; // 10 seconds
 const ROUND_DURATION_MICROS = 5n * 60n * 1_000_000n; // 5 minutes
-const ZOMBIE_ABILITY_COOLDOWN_MICROS = 15n * 1_000_000n; // 15 seconds (match server)
-const ZOMBIE_BOOST_DURATION_MICROS = 3n * 1_000_000n; // 3 seconds (match server)
+
+const BOOST_DURATION_MS = 3_000;
+const COOLDOWN_DURATION_MS = 15_000;
+const CHARGE_DURATION_MS = COOLDOWN_DURATION_MS - BOOST_DURATION_MS; // 12s
 
 interface HUDProps {
   players: Player[];
@@ -17,20 +19,68 @@ interface HUDProps {
   pingMs?: number | null;
 }
 
-/** Micros for display; updates every frame when ability bar is shown so charge/discharge is smooth. */
-function useDisplayTimeMicros(active: boolean) {
-  const [displayMicros, setDisplayMicros] = useState(() => BigInt(Date.now()) * 1000n);
+/** Fire this from anywhere that calls useZombieAbility so the HUD bar animates immediately. */
+export const BOOST_ACTIVATED_EVENT = 'zovid-boost-activated';
+export function fireBoostActivated() {
+  window.dispatchEvent(new Event(BOOST_ACTIVATED_EVENT));
+}
+
+/**
+ * Drives the ability bar from a single activation timestamp.
+ * Listens for the 'zovid-boost-activated' custom event so ANY trigger
+ * (HUD button, Space key, touch zone) starts the animation.
+ *
+ * Timeline after activation at T:
+ *   T → T+3s   : deplete 1→0  (boosting)
+ *   T+3s → T+15s: charge  0→1  (cooldown)
+ *   T+15s+      : full, ready
+ */
+function useAbilityBar(active: boolean) {
+  const [fill, setFill] = useState(1);
+  const [isBoosting, setIsBoosting] = useState(false);
+  const [isReady, setIsReady] = useState(true);
+  const activatedAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const onActivated = () => { activatedAtRef.current = performance.now(); };
+    window.addEventListener(BOOST_ACTIVATED_EVENT, onActivated);
+    return () => window.removeEventListener(BOOST_ACTIVATED_EVENT, onActivated);
+  }, [active]);
+
   useEffect(() => {
     if (!active) return;
     let rafId: number;
-    const tick = () => {
-      setDisplayMicros(BigInt(Date.now()) * 1000n);
-      rafId = requestAnimationFrame(tick);
+    const loop = () => {
+      const t = activatedAtRef.current;
+      if (t == null) {
+        setFill(1);
+        setIsBoosting(false);
+        setIsReady(true);
+      } else {
+        const elapsed = performance.now() - t;
+        if (elapsed < BOOST_DURATION_MS) {
+          setFill(1 - elapsed / BOOST_DURATION_MS);
+          setIsBoosting(true);
+          setIsReady(false);
+        } else if (elapsed < COOLDOWN_DURATION_MS) {
+          setFill((elapsed - BOOST_DURATION_MS) / CHARGE_DURATION_MS);
+          setIsBoosting(false);
+          setIsReady(false);
+        } else {
+          activatedAtRef.current = null;
+          setFill(1);
+          setIsBoosting(false);
+          setIsReady(true);
+        }
+      }
+      rafId = requestAnimationFrame(loop);
     };
-    rafId = requestAnimationFrame(tick);
+    rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
   }, [active]);
-  return displayMicros;
+
+  return { fill, isBoosting, isReady };
 }
 
 export function HUD({ players, config, localIdentity, connection, pingMs = null }: HUDProps) {
@@ -38,7 +88,6 @@ export function HUD({ players, config, localIdentity, connection, pingMs = null 
   const [nameInput, setNameInput] = useState('');
   const [nameError, setNameError] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
-  const [optimisticBoostEndMicros, setOptimisticBoostEndMicros] = useState<bigint | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const humans = players.filter((p) => !p.isZombie);
   const zombies = players.filter((p) => p.isZombie);
@@ -53,17 +102,9 @@ export function HUD({ players, config, localIdentity, connection, pingMs = null 
   const roundActive = config?.roundActive ?? false;
 
   const showAbilityBar = isZombie && roundActive;
-  const displayMicros = useDisplayTimeMicros(showAbilityBar);
-  const nowMicros = showAbilityBar ? displayMicros : BigInt(Date.now()) * 1000n;
+  const { fill: abilityBarFill, isBoosting: boostActive, isReady: abilityReady } = useAbilityBar(showAbilityBar);
 
-  // Prefer server boost end when available; otherwise use optimistic so bar starts draining on click
-  const serverBoostEnd = localPlayer && localPlayer.speedBoostUntilMicros > nowMicros ? localPlayer.speedBoostUntilMicros : null;
-  const optimisticStillActive = optimisticBoostEndMicros != null && optimisticBoostEndMicros > nowMicros;
-  const effectiveBoostEndMicros = serverBoostEnd ?? (optimisticStillActive ? optimisticBoostEndMicros : null);
-  useEffect(() => {
-    if (localPlayer && localPlayer.speedBoostUntilMicros > BigInt(Date.now()) * 1000n) setOptimisticBoostEndMicros(null);
-  }, [localPlayer?.speedBoostUntilMicros]);
-
+  const nowMicros = BigInt(Date.now()) * 1000n;
   const roundElapsedMs = config?.roundStartMicros
     ? Number(nowMicros - config.roundStartMicros) / 1000
     : 0;
@@ -131,43 +172,9 @@ export function HUD({ players, config, localIdentity, connection, pingMs = null 
     if (e.key === 'Escape') setIsEditingName(false);
   };
 
-  const boostActive = isZombie && effectiveBoostEndMicros != null;
-
-  const abilityReady =
-    isZombie &&
-    localPlayer &&
-    Number(localPlayer.abilityCooldownUntilMicros) <= Number(nowMicros);
-
-  const abilityBarFill =
-    isZombie && roundActive && localPlayer
-      ? boostActive && effectiveBoostEndMicros != null
-        ? Math.max(
-            0,
-            Math.min(
-              1,
-              Number(effectiveBoostEndMicros - nowMicros) /
-                Number(ZOMBIE_BOOST_DURATION_MICROS)
-            )
-          )
-        : Number(localPlayer.abilityCooldownUntilMicros) <= Number(nowMicros)
-          ? 1
-          : Math.max(
-              0,
-              Math.min(
-                1,
-                Number(
-                  nowMicros -
-                    (localPlayer.abilityCooldownUntilMicros -
-                      ZOMBIE_ABILITY_COOLDOWN_MICROS)
-                ) / Number(ZOMBIE_ABILITY_COOLDOWN_MICROS)
-              )
-            )
-      : 0;
-
   const handleBoostClick = () => {
     if (!connection || !abilityReady) return;
-    const clickMicros = BigInt(Date.now()) * 1000n;
-    setOptimisticBoostEndMicros(clickMicros + ZOMBIE_BOOST_DURATION_MICROS);
+    fireBoostActivated();
     connection.reducers.useZombieAbility({});
   };
 

@@ -5,7 +5,7 @@ import { DbConnection, tables } from './module_bindings';
 import { setConnection, setGameState, setLocalIdentity } from './game/stdbBridge';
 import { createGameConfig } from './game/config';
 import Phaser from 'phaser';
-import { HUD } from './components/HUD';
+import { HUD, fireBoostActivated } from './components/HUD';
 
 function App() {
   const { getConnection, identity, isActive } = useSpacetimeDB();
@@ -119,6 +119,7 @@ function App() {
       if (spaceKeyDownRef.current) return; // avoid repeat while key held
       spaceKeyDownRef.current = true;
       e.preventDefault();
+      fireBoostActivated();
       connection.reducers.useZombieAbility({});
     };
     const onKeyUp = (e: KeyboardEvent) => {

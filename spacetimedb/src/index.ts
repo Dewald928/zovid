@@ -1,5 +1,5 @@
-import { schema, t, SenderError } from 'spacetimedb/server';
-import { Player, GameConfig, Obstacle } from './schema';
+import { schema, t, SenderError } from "spacetimedb/server";
+import { Player, GameConfig, Obstacle } from "./schema";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const HUMAN_SPEED = 200.0;
@@ -8,7 +8,7 @@ const INFECTION_RADIUS = 40.0;
 const TICK_MICROS = 50_000n; // 50ms
 const ROUND_RESET_DELAY_MICROS = 10_000_000n; // 10 seconds
 const ROUND_DURATION_MICROS = 5n * 60n * 1_000_000n; // 5 minutes
-const ZOMBIE_SPEED_BOOST = 220.0;
+const ZOMBIE_SPEED_BOOST = 270.0;
 const ZOMBIE_BOOST_DURATION_MICROS = 3n * 1_000_000n; // 3 seconds
 const ZOMBIE_ABILITY_COOLDOWN_MICROS = 15n * 1_000_000n; // 15 seconds
 const BASE_MAP_SIZE = 2000.0;
@@ -42,9 +42,22 @@ const WALL_THICKNESS = 16;
 const DOOR_GAP = 40;
 const MARGIN = 120;
 
-type ObstacleRow = { id: bigint; groupId: bigint; x: number; y: number; width: number; height: number; obstacleType: string };
+type ObstacleRow = {
+  id: bigint;
+  groupId: bigint;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  obstacleType: string;
+};
 
-function collidesWithObstacle(obstacles: ObstacleRow[], px: number, py: number, halfSize: number): boolean {
+function collidesWithObstacle(
+  obstacles: ObstacleRow[],
+  px: number,
+  py: number,
+  halfSize: number,
+): boolean {
   for (const o of obstacles) {
     const obsLeft = o.x - o.width / 2;
     const obsRight = o.x + o.width / 2;
@@ -63,13 +76,27 @@ function collidesWithObstacle(obstacles: ObstacleRow[], px: number, py: number, 
 }
 
 function insertObstacle(
-  ctx: { db: { Obstacle: { insert: (row: { id: bigint; groupId: bigint; x: number; y: number; width: number; height: number; obstacleType: string }) => void } } },
+  ctx: {
+    db: {
+      Obstacle: {
+        insert: (row: {
+          id: bigint;
+          groupId: bigint;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          obstacleType: string;
+        }) => void;
+      };
+    };
+  },
   groupId: bigint,
   x: number,
   y: number,
   width: number,
   height: number,
-  obstacleType: string
+  obstacleType: string,
 ): void {
   ctx.db.Obstacle.insert({
     id: 0n,
@@ -83,17 +110,31 @@ function insertObstacle(
 }
 
 function generateBuilding(
-  ctx: { db: { Obstacle: { insert: (row: { id: bigint; groupId: bigint; x: number; y: number; width: number; height: number; obstacleType: string }) => void } } },
+  ctx: {
+    db: {
+      Obstacle: {
+        insert: (row: {
+          id: bigint;
+          groupId: bigint;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          obstacleType: string;
+        }) => void;
+      };
+    };
+  },
   roundNum: bigint,
   index: number,
   mapW: number,
-  mapH: number
+  mapH: number,
 ): void {
   const seedBase = `building-${roundNum}-${index}`;
   const cx = MARGIN + deterministicHash(seedBase) * (mapW - 2 * MARGIN);
-  const cy = MARGIN + deterministicHash(seedBase + 'y') * (mapH - 2 * MARGIN);
-  const w = 160 + deterministicHash(seedBase + 'w') * 80;
-  const h = 120 + deterministicHash(seedBase + 'h') * 80;
+  const cy = MARGIN + deterministicHash(seedBase + "y") * (mapH - 2 * MARGIN);
+  const w = 160 + deterministicHash(seedBase + "w") * 80;
+  const h = 120 + deterministicHash(seedBase + "h") * 80;
   const halfW = w / 2;
   const halfH = h / 2;
   const t = WALL_THICKNESS;
@@ -103,59 +144,170 @@ function generateBuilding(
   // Top wall: two segments with gap in middle
   const topLeftSegW = halfW - gap / 2;
   const topRightSegW = halfW - gap / 2;
-  insertObstacle(ctx, groupId, cx - halfW + topLeftSegW / 2, cy - halfH - t / 2, topLeftSegW, t, 'building_wall');
-  insertObstacle(ctx, groupId, cx + halfW - topRightSegW / 2, cy - halfH - t / 2, topRightSegW, t, 'building_wall');
+  insertObstacle(
+    ctx,
+    groupId,
+    cx - halfW + topLeftSegW / 2,
+    cy - halfH - t / 2,
+    topLeftSegW,
+    t,
+    "building_wall",
+  );
+  insertObstacle(
+    ctx,
+    groupId,
+    cx + halfW - topRightSegW / 2,
+    cy - halfH - t / 2,
+    topRightSegW,
+    t,
+    "building_wall",
+  );
 
   // Bottom wall
-  insertObstacle(ctx, groupId, cx - halfW + topLeftSegW / 2, cy + halfH + t / 2, topLeftSegW, t, 'building_wall');
-  insertObstacle(ctx, groupId, cx + halfW - topRightSegW / 2, cy + halfH + t / 2, topRightSegW, t, 'building_wall');
+  insertObstacle(
+    ctx,
+    groupId,
+    cx - halfW + topLeftSegW / 2,
+    cy + halfH + t / 2,
+    topLeftSegW,
+    t,
+    "building_wall",
+  );
+  insertObstacle(
+    ctx,
+    groupId,
+    cx + halfW - topRightSegW / 2,
+    cy + halfH + t / 2,
+    topRightSegW,
+    t,
+    "building_wall",
+  );
 
   // Left wall: two segments with gap
   const leftGapTop = halfH - gap / 2;
   const leftGapBottom = halfH + gap / 2;
   const leftTopSegH = leftGapTop;
   const leftBottomSegH = h - leftGapBottom;
-  insertObstacle(ctx, groupId, cx - halfW - t / 2, cy - halfH + leftTopSegH / 2, t, leftTopSegH, 'building_wall');
-  insertObstacle(ctx, groupId, cx - halfW - t / 2, cy + halfH - leftBottomSegH / 2, t, leftBottomSegH, 'building_wall');
+  insertObstacle(
+    ctx,
+    groupId,
+    cx - halfW - t / 2,
+    cy - halfH + leftTopSegH / 2,
+    t,
+    leftTopSegH,
+    "building_wall",
+  );
+  insertObstacle(
+    ctx,
+    groupId,
+    cx - halfW - t / 2,
+    cy + halfH - leftBottomSegH / 2,
+    t,
+    leftBottomSegH,
+    "building_wall",
+  );
 
   // Right wall
-  insertObstacle(ctx, groupId, cx + halfW + t / 2, cy - halfH + leftTopSegH / 2, t, leftTopSegH, 'building_wall');
-  insertObstacle(ctx, groupId, cx + halfW + t / 2, cy + halfH - leftBottomSegH / 2, t, leftBottomSegH, 'building_wall');
+  insertObstacle(
+    ctx,
+    groupId,
+    cx + halfW + t / 2,
+    cy - halfH + leftTopSegH / 2,
+    t,
+    leftTopSegH,
+    "building_wall",
+  );
+  insertObstacle(
+    ctx,
+    groupId,
+    cx + halfW + t / 2,
+    cy + halfH - leftBottomSegH / 2,
+    t,
+    leftBottomSegH,
+    "building_wall",
+  );
 
   // Internal divider(s): 1 or 2 walls with gap
-  const divCount = deterministicHash(seedBase + 'div') < 0.5 ? 1 : 2;
+  const divCount = deterministicHash(seedBase + "div") < 0.5 ? 1 : 2;
   for (let d = 0; d < divCount; d++) {
     const vert = deterministicHash(seedBase + `div-${d}`) < 0.5;
     const gapPos = deterministicHash(seedBase + `divgap-${d}`);
     if (vert) {
-      const divX = cx - halfW + (w * (0.3 + 0.4 * d)) / (divCount);
+      const divX = cx - halfW + (w * (0.3 + 0.4 * d)) / divCount;
       const segH = halfH * gapPos * 0.8;
-      insertObstacle(ctx, groupId, divX, cy - halfH + segH / 2, t, segH, 'building_wall');
-      insertObstacle(ctx, groupId, divX, cy + halfH - segH / 2, t, segH, 'building_wall');
+      insertObstacle(
+        ctx,
+        groupId,
+        divX,
+        cy - halfH + segH / 2,
+        t,
+        segH,
+        "building_wall",
+      );
+      insertObstacle(
+        ctx,
+        groupId,
+        divX,
+        cy + halfH - segH / 2,
+        t,
+        segH,
+        "building_wall",
+      );
     } else {
-      const divY = cy - halfH + (h * (0.35 + 0.3 * d)) / (divCount);
+      const divY = cy - halfH + (h * (0.35 + 0.3 * d)) / divCount;
       const segW = halfW * gapPos * 0.8;
-      insertObstacle(ctx, groupId, cx - halfW + segW / 2, divY, segW, t, 'building_wall');
-      insertObstacle(ctx, groupId, cx + halfW - (halfW - segW) / 2, divY, halfW - segW, t, 'building_wall');
+      insertObstacle(
+        ctx,
+        groupId,
+        cx - halfW + segW / 2,
+        divY,
+        segW,
+        t,
+        "building_wall",
+      );
+      insertObstacle(
+        ctx,
+        groupId,
+        cx + halfW - (halfW - segW) / 2,
+        divY,
+        halfW - segW,
+        t,
+        "building_wall",
+      );
     }
   }
 }
 
 function generateRuin(
-  ctx: { db: { Obstacle: { insert: (row: { id: bigint; groupId: bigint; x: number; y: number; width: number; height: number; obstacleType: string }) => void } } },
+  ctx: {
+    db: {
+      Obstacle: {
+        insert: (row: {
+          id: bigint;
+          groupId: bigint;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          obstacleType: string;
+        }) => void;
+      };
+    };
+  },
   roundNum: bigint,
   index: number,
   mapW: number,
-  mapH: number
+  mapH: number,
 ): void {
   const seedBase = `ruin-${roundNum}-${index}`;
   const baseX = MARGIN + deterministicHash(seedBase) * (mapW - 2 * MARGIN);
-  const baseY = MARGIN + deterministicHash(seedBase + 'y') * (mapH - 2 * MARGIN);
-  const orient = Math.floor(deterministicHash(seedBase + 'o') * 3);
+  const baseY =
+    MARGIN + deterministicHash(seedBase + "y") * (mapH - 2 * MARGIN);
+  const orient = Math.floor(deterministicHash(seedBase + "o") * 3);
   const groupId = BigInt(2000 + index);
-  const numFrags = 3 + Math.floor(deterministicHash(seedBase + 'n') * 4);
+  const numFrags = 3 + Math.floor(deterministicHash(seedBase + "n") * 4);
   const isHoriz = orient === 0;
-  const len = 80 + deterministicHash(seedBase + 'len') * 100;
+  const len = 80 + deterministicHash(seedBase + "len") * 100;
   let pos = 0;
   for (let i = 0; i < numFrags && pos < len; i++) {
     const gap = 15 + deterministicHash(seedBase + `g-${i}`) * 15;
@@ -165,42 +317,84 @@ function generateRuin(
     const perp = (deterministicHash(seedBase + `p-${i}`) - 0.5) * 24;
     const cx = baseX + (isHoriz ? pos + segLen / 2 : perp);
     const cy = baseY + (isHoriz ? perp : pos + segLen / 2);
-    insertObstacle(ctx, groupId, cx, cy, isHoriz ? segLen : segW, isHoriz ? segW : segLen, 'ruin');
+    insertObstacle(
+      ctx,
+      groupId,
+      cx,
+      cy,
+      isHoriz ? segLen : segW,
+      isHoriz ? segW : segLen,
+      "ruin",
+    );
     pos += segLen;
   }
 }
 
 function generateTrees(
-  ctx: { db: { Obstacle: { insert: (row: { id: bigint; groupId: bigint; x: number; y: number; width: number; height: number; obstacleType: string }) => void } } },
+  ctx: {
+    db: {
+      Obstacle: {
+        insert: (row: {
+          id: bigint;
+          groupId: bigint;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          obstacleType: string;
+        }) => void;
+      };
+    };
+  },
   roundNum: bigint,
   startIndex: number,
   count: number,
   mapW: number,
-  mapH: number
+  mapH: number,
 ): void {
   for (let i = 0; i < count; i++) {
     const seed = `tree-${roundNum}-${startIndex + i}`;
     const x = MARGIN + deterministicHash(seed) * (mapW - 2 * MARGIN);
-    const y = MARGIN + deterministicHash(seed + 'y') * (mapH - 2 * MARGIN);
-    const size = 24 + deterministicHash(seed + 's') * 12;
-    insertObstacle(ctx, 0n, x, y, size, size, 'tree');
+    const y = MARGIN + deterministicHash(seed + "y") * (mapH - 2 * MARGIN);
+    const size = 24 + deterministicHash(seed + "s") * 12;
+    insertObstacle(ctx, 0n, x, y, size, size, "tree");
   }
 }
 
 function generateAllObstacles(
-  ctx: { db: { Obstacle: { iter: () => Iterable<ObstacleRow>; id: { delete: (id: bigint) => void }; insert: (row: { id: bigint; groupId: bigint; x: number; y: number; width: number; height: number; obstacleType: string }) => void } } },
+  ctx: {
+    db: {
+      Obstacle: {
+        iter: () => Iterable<ObstacleRow>;
+        id: { delete: (id: bigint) => void };
+        insert: (row: {
+          id: bigint;
+          groupId: bigint;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          obstacleType: string;
+        }) => void;
+      };
+    };
+  },
   roundNum: bigint,
   mapW: number,
-  mapH: number
+  mapH: number,
 ): void {
   for (const o of ctx.db.Obstacle.iter()) {
     ctx.db.Obstacle.id.delete(o.id);
   }
   const area = mapW * mapH;
-  const numBuildings = Math.max(12, Math.min(18, Math.floor(area / 1e6 * 4.5)));
-  const numRuins = Math.max(30, Math.min(45, Math.floor(area / 1e6 * 9)));
-  const numTrees = Math.max(90, Math.min(150, Math.floor(area / 1e6 * 36)));
-  for (let b = 0; b < numBuildings; b++) generateBuilding(ctx, roundNum, b, mapW, mapH);
+  const numBuildings = Math.max(
+    12,
+    Math.min(18, Math.floor((area / 1e6) * 4.5)),
+  );
+  const numRuins = Math.max(30, Math.min(45, Math.floor((area / 1e6) * 9)));
+  const numTrees = Math.max(90, Math.min(150, Math.floor((area / 1e6) * 36)));
+  for (let b = 0; b < numBuildings; b++)
+    generateBuilding(ctx, roundNum, b, mapW, mapH);
   for (let r = 0; r < numRuins; r++) generateRuin(ctx, roundNum, r, mapW, mapH);
   generateTrees(ctx, roundNum, 0, numTrees, mapW, mapH);
 }
@@ -219,7 +413,11 @@ export const tick = spacetimedb.reducer((ctx) => {
   const now = ctx.timestamp.microsSinceUnixEpoch;
 
   // Round reset after delay (replaces scheduled RoundResetJob)
-  if (!config.roundActive && config.roundEndMicros > 0n && now - config.roundEndMicros >= ROUND_RESET_DELAY_MICROS) {
+  if (
+    !config.roundActive &&
+    config.roundEndMicros > 0n &&
+    now - config.roundEndMicros >= ROUND_RESET_DELAY_MICROS
+  ) {
     const players = [...ctx.db.Player.iter()];
     if (players.length === 0) {
       ctx.db.GameConfig.id.update({
@@ -239,11 +437,17 @@ export const tick = spacetimedb.reducer((ctx) => {
       const p = players[i];
       const seed = `${newRound}-${i}-${p.identity.toHexString()}`;
       let x = deterministicHash(seed) * (mapW - 100) + 50;
-      let y = deterministicHash(seed + 'y') * (mapH - 100) + 50;
+      let y = deterministicHash(seed + "y") * (mapH - 100) + 50;
       const nudge = 48;
       while (collidesWithObstacle(obstacles, x, y, PLAYER_HALF)) {
-        x = Math.max(50, Math.min(mapW - 50, x + (i % 2 === 0 ? nudge : -nudge)));
-        y = Math.max(50, Math.min(mapH - 50, y + (i % 3 === 0 ? nudge : -nudge)));
+        x = Math.max(
+          50,
+          Math.min(mapW - 50, x + (i % 2 === 0 ? nudge : -nudge)),
+        );
+        y = Math.max(
+          50,
+          Math.min(mapH - 50, y + (i % 3 === 0 ? nudge : -nudge)),
+        );
       }
       ctx.db.Player.identity.update({
         ...p,
@@ -310,7 +514,9 @@ export const tick = spacetimedb.reducer((ctx) => {
   for (const p of ctx.db.Player.iter()) {
     const { x: dx, y: dy } = normalizeDir(p.dirX, p.dirY);
     const zombieSpeed =
-      p.isZombie && now < p.speedBoostUntilMicros ? ZOMBIE_SPEED_BOOST : ZOMBIE_SPEED;
+      p.isZombie && now < p.speedBoostUntilMicros
+        ? ZOMBIE_SPEED_BOOST
+        : ZOMBIE_SPEED;
     const speed = p.isZombie ? zombieSpeed : HUMAN_SPEED;
     let nx = p.x + dx * speed * TICK_DT_SEC;
     let ny = p.y + dy * speed * TICK_DT_SEC;
@@ -367,14 +573,14 @@ export const tick = spacetimedb.reducer((ctx) => {
       ...cfg,
       roundActive: false,
       roundEndMicros: now,
-      roundWinner: 'humans',
+      roundWinner: "humans",
     });
   } else if (humansLeft.length === 0 && allPlayers.length >= 2) {
     ctx.db.GameConfig.id.update({
       ...cfg,
       roundActive: false,
       roundEndMicros: now,
-      roundWinner: 'zombies',
+      roundWinner: "zombies",
     });
   }
 });
@@ -387,7 +593,7 @@ export const set_input = spacetimedb.reducer(
     if (!player) return;
     const { x, y } = normalizeDir(dirX, dirY);
     ctx.db.Player.identity.update({ ...player, dirX: x, dirY: y });
-  }
+  },
 );
 
 export const use_zombie_ability = spacetimedb.reducer((ctx) => {
@@ -404,23 +610,26 @@ export const use_zombie_ability = spacetimedb.reducer((ctx) => {
   });
 });
 
-export const set_name = spacetimedb.reducer({ name: t.string() }, (ctx, { name }) => {
-  const player = ctx.db.Player.identity.find(ctx.sender);
-  if (!player) throw new SenderError('Not in game');
-  const trimmed = (name ?? '').trim().slice(0, 32);
-  const finalName = trimmed || 'Player';
+export const set_name = spacetimedb.reducer(
+  { name: t.string() },
+  (ctx, { name }) => {
+    const player = ctx.db.Player.identity.find(ctx.sender);
+    if (!player) throw new SenderError("Not in game");
+    const trimmed = (name ?? "").trim().slice(0, 32);
+    const finalName = trimmed || "Player";
 
-  for (const other of ctx.db.Player.iter()) {
-    if (
-      other.identity.toHexString() !== ctx.sender.toHexString() &&
-      other.name.toLowerCase() === finalName.toLowerCase()
-    ) {
-      throw new SenderError('Name already taken');
+    for (const other of ctx.db.Player.iter()) {
+      if (
+        other.identity.toHexString() !== ctx.sender.toHexString() &&
+        other.name.toLowerCase() === finalName.toLowerCase()
+      ) {
+        throw new SenderError("Name already taken");
+      }
     }
-  }
 
-  ctx.db.Player.identity.update({ ...player, name: finalName });
-});
+    ctx.db.Player.identity.update({ ...player, name: finalName });
+  },
+);
 
 // ─── Init ─────────────────────────────────────────────────────────────────
 export const init = spacetimedb.init((ctx) => {
@@ -443,7 +652,11 @@ export const init = spacetimedb.init((ctx) => {
 export const onConnect = spacetimedb.clientConnected((ctx) => {
   const existing = ctx.db.Player.identity.find(ctx.sender);
   if (existing) {
-    ctx.db.Player.identity.update({ ...existing, x: existing.x, y: existing.y });
+    ctx.db.Player.identity.update({
+      ...existing,
+      x: existing.x,
+      y: existing.y,
+    });
     return;
   }
 
@@ -452,7 +665,7 @@ export const onConnect = spacetimedb.clientConnected((ctx) => {
   const mapH = config?.mapHeight ?? BASE_MAP_SIZE;
   const seed = ctx.sender.toHexString();
   const x = deterministicHash(seed) * (mapW - 100) + 50;
-  const y = deterministicHash(seed + 'y') * (mapH - 100) + 50;
+  const y = deterministicHash(seed + "y") * (mapH - 100) + 50;
 
   const players = [...ctx.db.Player.iter()];
   const isFirst = players.length === 0;
@@ -464,7 +677,7 @@ export const onConnect = spacetimedb.clientConnected((ctx) => {
     dirX: 0,
     dirY: 0,
     isZombie: isFirst,
-    name: 'Player',
+    name: "Player",
     score: 0n,
     speedBoostUntilMicros: 0n,
     abilityCooldownUntilMicros: 0n,
@@ -498,6 +711,10 @@ export const onDisconnect = spacetimedb.clientDisconnected((ctx) => {
 
   if (config && players.length > 0) {
     const newSize = mapSizeForPlayers(players.length - 1);
-    ctx.db.GameConfig.id.update({ ...config, mapWidth: newSize, mapHeight: newSize });
+    ctx.db.GameConfig.id.update({
+      ...config,
+      mapWidth: newSize,
+      mapHeight: newSize,
+    });
   }
 });

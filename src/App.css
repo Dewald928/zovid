@@ -123,13 +123,15 @@
   letter-spacing: 0.02em;
 }
 
-/* Mobile: ability bar + button bottom-left, hide (Space) text; joystick is bottom-right in Phaser */
+/* Mobile: ability bar + button bottom-left, above screen bottom; joystick is bottom quarter right in Phaser */
 @media (max-width: 768px), (hover: none) and (pointer: coarse) {
   .hud-ability-bar-wrap {
     top: auto;
-    bottom: 1rem;
     left: 1rem;
     transform: none;
+    /* Stay above bottom: scale with viewport height and respect safe area */
+    bottom: 1rem;
+    bottom: calc(max(1rem, 6vh) + env(safe-area-inset-bottom, 0px));
   }
   .hud-ability-bar-key {
     display: none;

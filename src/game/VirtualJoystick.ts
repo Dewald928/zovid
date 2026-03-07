@@ -55,14 +55,7 @@ export class VirtualJoystick {
     }
   }
 
-  private getBasePosition(): { x: number; y: number } {
-    const w = this.scene.scale.width;
-    const h = this.scene.scale.height;
-    const marginRight = 100;
-    const marginBottom = 120;
-    return { x: w - marginRight, y: h - marginBottom };
-  }
-
+  /** Activation zone: bottom half of the screen, right half. */
   private isInBottomRight(ptr: Phaser.Input.Pointer): boolean {
     const w = this.scene.scale.width;
     const h = this.scene.scale.height;
@@ -74,14 +67,13 @@ export class VirtualJoystick {
       if (this.active) return;
       if (!this.isInBottomRight(ptr)) return;
 
-      const pos = this.getBasePosition();
       this.active = true;
       this.activePointerId = ptr.id;
-      this.originX = pos.x;
-      this.originY = pos.y;
+      this.originX = ptr.x;
+      this.originY = ptr.y;
 
-      this.base.setPosition(pos.x, pos.y);
-      this.knob.setPosition(pos.x, pos.y);
+      this.base.setPosition(ptr.x, ptr.y);
+      this.knob.setPosition(ptr.x, ptr.y);
       this.base.setVisible(true);
       this.knob.setVisible(true);
     });

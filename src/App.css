@@ -45,6 +45,46 @@
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
+  pointer-events: none;
+}
+.hud-ability-bar-wrap .hud-ability-bar-track,
+.hud-ability-bar-wrap .hud-ability-bar-label,
+.hud-ability-bar-wrap .hud-ability-bar-key {
+  pointer-events: none;
+}
+.hud-ability-btn {
+  pointer-events: auto;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #0a1a0a;
+  background: linear-gradient(to bottom, #44ff44, #2a8a2a);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 8px;
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 80px;
+  touch-action: manipulation;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: filter 0.15s, transform 0.1s;
+}
+.hud-ability-btn:hover {
+  filter: brightness(1.15);
+}
+.hud-ability-btn:active {
+  transform: scale(0.97);
+}
+.hud-ability-btn-cooldown {
+  background: linear-gradient(to bottom, #4a4a4a, #2a2a2a);
+  color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.2);
+  cursor: not-allowed;
+}
+.hud-ability-btn-cooldown:hover {
+  filter: none;
 }
 .hud-ability-bar-track {
   width: 20px;
@@ -81,6 +121,19 @@
   color: rgba(255, 255, 255, 0.7);
   text-transform: none;
   letter-spacing: 0.02em;
+}
+
+/* Mobile: ability bar + button bottom-left, hide (Space) text; joystick is bottom-right in Phaser */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .hud-ability-bar-wrap {
+    top: auto;
+    bottom: 1rem;
+    left: 1rem;
+    transform: none;
+  }
+  .hud-ability-bar-key {
+    display: none;
+  }
 }
 
 .hud-stats {

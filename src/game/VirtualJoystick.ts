@@ -55,18 +55,33 @@ export class VirtualJoystick {
     }
   }
 
+  private getBasePosition(): { x: number; y: number } {
+    const w = this.scene.scale.width;
+    const h = this.scene.scale.height;
+    const marginRight = 100;
+    const marginBottom = 120;
+    return { x: w - marginRight, y: h - marginBottom };
+  }
+
+  private isInBottomRight(ptr: Phaser.Input.Pointer): boolean {
+    const w = this.scene.scale.width;
+    const h = this.scene.scale.height;
+    return ptr.x > w * 0.5 && ptr.y > h * 0.5;
+  }
+
   private bindEvents(): void {
     this.scene.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
       if (this.active) return;
-      if (ptr.x > this.scene.scale.width * 0.5) return;
+      if (!this.isInBottomRight(ptr)) return;
 
+      const pos = this.getBasePosition();
       this.active = true;
       this.activePointerId = ptr.id;
-      this.originX = ptr.x;
-      this.originY = ptr.y;
+      this.originX = pos.x;
+      this.originY = pos.y;
 
-      this.base.setPosition(ptr.x, ptr.y);
-      this.knob.setPosition(ptr.x, ptr.y);
+      this.base.setPosition(pos.x, pos.y);
+      this.knob.setPosition(pos.x, pos.y);
       this.base.setVisible(true);
       this.knob.setVisible(true);
     });

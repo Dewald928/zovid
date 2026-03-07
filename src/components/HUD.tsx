@@ -107,6 +107,11 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
     localPlayer &&
     localPlayer.speedBoostUntilMicros > nowMicros;
 
+  const abilityReady =
+    isZombie &&
+    localPlayer &&
+    Number(localPlayer.abilityCooldownUntilMicros) <= Number(nowMicros);
+
   const abilityBarFill =
     isZombie && roundActive && localPlayer
       ? boostActive
@@ -144,7 +149,16 @@ export function HUD({ players, config, localIdentity, connection }: HUDProps) {
             />
           </div>
           <span className="hud-ability-bar-label">Speed</span>
-          <span className="hud-ability-bar-key">(Space)</span>
+          <span className="hud-ability-bar-key" aria-hidden="true">(Space)</span>
+          <button
+            type="button"
+            className={`hud-ability-btn ${abilityReady ? '' : 'hud-ability-btn-cooldown'}`}
+            disabled={!abilityReady}
+            onClick={() => connection?.reducers.useZombieAbility({})}
+            aria-label="Use speed boost"
+          >
+            Boost
+          </button>
         </div>
       )}
       <div className="hud-stats">

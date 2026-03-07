@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Room, RoomEvent } from 'livekit-client';
+import { Room, RoomEvent, AudioPresets } from 'livekit-client';
 import type { RemoteTrack } from 'livekit-client';
 import type { Identity } from 'spacetimedb';
 import type { Player } from '../module_bindings/types';
@@ -7,7 +7,7 @@ import { fetchLiveKitToken } from './fetchLiveKitToken';
 import { getGameState } from '../game/stdbBridge';
 
 const VOICE_RADIUS = 500;
-const PROXIMITY_UPDATE_MS = 150;
+const PROXIMITY_UPDATE_MS = 200;
 const VOICE_DEBUG_INTERVAL_MS = 3000;
 
 function identityHex(playerIdentity: { toHexString: () => string }): string {
@@ -75,6 +75,9 @@ export function useProximityVoice({
       },
       publishDefaults: {
         dtx: true,
+        audioPreset: AudioPresets.speech,
+        red: false,
+        forceStereo: false,
       },
     });
 

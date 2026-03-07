@@ -60,11 +60,23 @@ The token API uses these to sign tokens; no media runs on Vercel.
 
 ### Voice toggle and debugging
 
-- **Toggle** – Use the mic icon at the top-right to turn voice chat on or off (state is stored in `localStorage`).
+- **Toggle** – Use the small mic icon next to your player name to turn voice chat on or off (state is stored in `localStorage`).
 - **No sound?** – Open DevTools (F12) → Console. Then either: **(1)** In the **address bar**, add `?voice_debug=1` to the page URL (e.g. `http://localhost:3000/?voice_debug=1`) and press Enter; or **(2)** In the **console**, run `window.__ZOVID_VOICE_DEBUG = true` and reload the page. You’ll see periodic logs:
   - **Recording**: `micEnabled`, `hasAudioPublication` – confirms the mic is captured and published.
   - **Transmission**: `connectionState` (should be `connected`), `remoteCount` – confirms you’re in the room and see others.
   - **Playback**: for each remote, `distance`, `volume`, `hasAudioTrack` – if `volume` is 0 or `hasAudioTrack` is false, you won’t hear them; move closer (under 500 units) or check that the other client has voice on and mic allowed.
+
+### Optimising LiveKit usage (keep costs low)
+
+The app is already tuned to reduce bandwidth and CPU:
+
+- **Connect only when needed** – Voice connects only when the round is active and the user has voice enabled; it disconnects when the round ends or voice is turned off.
+- **DTX** – Discontinuous transmission: no audio packets are sent when you’re silent, cutting bandwidth and server work.
+- **Speech preset** – Audio is published with the speech preset (lower bitrate than music).
+- **Mono, no RED** – Mono audio and redundant encoding disabled to save a bit more bandwidth (trade-off: slightly less resilience to packet loss).
+- **Noise suppression / AGC / echo cancellation** – Cleaner capture so the encoder can work efficiently.
+
+If you self-host, you can also: run a single region close to your players, size the instance for your peak concurrency, and use the LiveKit dashboard or metrics to watch participant minutes and bandwidth.
 
 ---
 

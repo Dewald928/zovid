@@ -27,6 +27,7 @@ export interface UseProximityVoiceParams {
   isZombie: boolean;
   players: Player[];
   roundActive: boolean;
+  roomId?: bigint;
 }
 
 /**
@@ -40,6 +41,7 @@ export function useProximityVoice({
   isZombie,
   players,
   roundActive,
+  roomId = 0n,
 }: UseProximityVoiceParams): { startAudio: () => void } {
   const roomRef = useRef<Room | null>(null);
   const targetRoomRef = useRef<string | null>(null);
@@ -49,15 +51,15 @@ export function useProximityVoice({
     roomRef.current?.startAudio?.();
   }, []);
 
-  // Join the correct team room when enabled and we have identity
+  // Join the correct team room when enabled and we have identity (room-scoped: zovid-{roomId}-human/zombie)
   useEffect(() => {
-    if (!enabled || !identity || !roundActive) {
+    if (!enabled || !identity || !roundActive || roomId === 0n) {
       targetRoomRef.current = null;
       setConnected(false);
       return;
     }
 
-    const roomName = isZombie ? 'zovid-zombie' : 'zovid-human';
+    const roomName = isZombie ? `zovid-${roomId}-zombie` : `zovid-${roomId}-human`;
     targetRoomRef.current = roomName;
 
     const participantIdentity = identity.toHexString();
@@ -145,7 +147,7 @@ export function useProximityVoice({
       setConnected(false);
       room.disconnect();
     };
-  }, [enabled, identity?.toHexString(), isZombie, roundActive]);
+  }, [enabled, identity?.toHexString(), isZombie, roundActive, roomId]);
 
   // Proximity volume loop: set each remote participant's volume by distance.
   // Depends on `connected` so the interval starts only after room.connect() completes

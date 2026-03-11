@@ -1,7 +1,11 @@
 /// <reference types="node" />
 import { AccessToken } from 'livekit-server-sdk';
 
-const ROOMS = new Set(['zovid-human', 'zovid-zombie']);
+// Room-scoped voice: zovid-{roomId}-human | zovid-{roomId}-zombie (roomId 1, 2 for lobbies; extend for private rooms)
+const ROOM_PATTERN = /^zovid-(1|2)-(human|zombie)$/;
+function isAllowedRoom(room: string): boolean {
+  return ROOM_PATTERN.test(room);
+}
 
 type LiveKitTokenBody = {
   room: string;
@@ -47,7 +51,7 @@ export default {
       );
     }
 
-    if (!ROOMS.has(room)) {
+    if (!isAllowedRoom(room)) {
       return new Response(JSON.stringify({ error: 'Invalid room' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },

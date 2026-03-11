@@ -12,6 +12,7 @@ import {
 
 export const BotZombie = __t.object("BotZombie", {
   id: __t.u64(),
+  roomId: __t.u64(),
   x: __t.f64(),
   y: __t.f64(),
   dirX: __t.f64(),
@@ -38,6 +39,7 @@ export type GameConfig = __Infer<typeof GameConfig>;
 
 export const Obstacle = __t.object("Obstacle", {
   id: __t.u64(),
+  roomId: __t.u64(),
   groupId: __t.u64(),
   x: __t.f64(),
   y: __t.f64(),
@@ -49,6 +51,7 @@ export type Obstacle = __Infer<typeof Obstacle>;
 
 export const Player = __t.object("Player", {
   identity: __t.identity(),
+  roomId: __t.u64(),
   x: __t.f64(),
   y: __t.f64(),
   dirX: __t.f64(),

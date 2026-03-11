@@ -249,6 +249,25 @@
   padding: 1rem;
 }
 
+.hud-leave-btn {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  pointer-events: auto;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.hud-leave-btn:hover {
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+
 /* Zombie ability bar — left side, vertical, depletes on use and charges over cooldown */
 .hud-ability-bar-wrap {
   position: absolute;

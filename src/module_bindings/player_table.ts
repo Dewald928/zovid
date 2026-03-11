@@ -12,6 +12,7 @@ import {
 
 export default __t.row({
   identity: __t.identity().primaryKey(),
+  roomId: __t.u64().name("room_id"),
   x: __t.f64(),
   y: __t.f64(),
   dirX: __t.f64().name("dir_x"),

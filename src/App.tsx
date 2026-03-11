@@ -38,12 +38,18 @@ function App() {
     }
   }, [voiceEnabled]);
 
-  const config = configRows.length > 0 ? configRows[0] : null;
   const localPlayer = identity
     ? (players ?? []).find((p) => p.identity.toHexString() === identity.toHexString())
     : null;
+  const roomId = localPlayer?.roomId ?? 0n;
+  const inMenu = roomId === 0n;
+  const config = configRows.find((c) => c.id === roomId) ?? null;
   const isZombie = localPlayer?.isZombie ?? false;
   const roundActive = config?.roundActive ?? false;
+
+  const roomPlayers = (players ?? []).filter((p) => p.roomId === roomId);
+  const roomObstacles = (obstacles ?? []).filter((o) => o.roomId === roomId);
+  const roomBotZombies = (botZombies ?? []).filter((b) => b.roomId === roomId);
 
   useEffect(() => {
     if (!connection) {
@@ -81,15 +87,15 @@ function App() {
 
   useEffect(() => {
     setGameState({
-      players: players ? [...players] : [],
+      players: roomPlayers,
       config,
-      obstacles: obstacles ? [...obstacles] : [],
-      botZombies: botZombies ? [...botZombies] : [],
+      obstacles: roomObstacles,
+      botZombies: roomBotZombies,
     });
-  }, [players, config, obstacles, botZombies]);
+  }, [roomPlayers, config, roomObstacles, roomBotZombies]);
 
   const gameMode = config?.gameMode;
-  const showGame = isActive && (gameMode === 'vs_humans' || gameMode === 'vs_bots');
+  const showGame = isActive && !inMenu && (gameMode === 'vs_humans' || gameMode === 'vs_bots');
 
   useEffect(() => {
     if (!containerRef.current || !showGame) return;
@@ -133,11 +139,12 @@ function App() {
   }, [identity]);
 
   const { startAudio } = useProximityVoice({
-    enabled: voiceEnabled && isActive && !!identity && !!localPlayer,
+    enabled: voiceEnabled && isActive && !!identity && !!localPlayer && !inMenu,
     identity: identity ?? null,
     isZombie,
-    players: players ? [...players] : [],
+    players: roomPlayers,
     roundActive,
+    roomId,
   });
 
   // Global Space key: trigger zombie ability (works even when canvas doesn't have focus)
@@ -170,7 +177,7 @@ function App() {
     );
   }
 
-  if (!gameMode) {
+  if (inMenu) {
     return (
       <div className="app app-menu">
         <div className="app-menu-bg" aria-hidden="true" />
@@ -184,7 +191,7 @@ function App() {
             <button
               type="button"
               className="app-menu-btn app-menu-btn-humans"
-              onClick={() => connection?.reducers.setGameMode({ mode: 'vs_humans' })}
+              onClick={() => connection?.reducers.joinRoom({ mode: 'vs_humans' })}
             >
               <span className="app-menu-btn-label">Vs Humans</span>
               <span className="app-menu-btn-desc">Multiplayer — infect or survive</span>
@@ -192,7 +199,7 @@ function App() {
             <button
               type="button"
               className="app-menu-btn app-menu-btn-bots"
-              onClick={() => connection?.reducers.setGameMode({ mode: 'vs_bots' })}
+              onClick={() => connection?.reducers.joinRoom({ mode: 'vs_bots' })}
             >
               <span className="app-menu-btn-label">Vs Bots</span>
               <span className="app-menu-btn-desc">Multiplayer survival — endless zombie waves</span>
@@ -215,14 +222,15 @@ function App() {
     <div className="app">
       <div ref={containerRef} id="phaser-game" className="app-game" />
       <HUD
-        players={players ? [...players] : []}
+        players={roomPlayers}
         config={config}
-        botZombies={botZombies ? [...botZombies] : []}
+        botZombies={roomBotZombies}
         localIdentity={identity ?? undefined}
         connection={connection ?? null}
         pingMs={pingMs}
         voiceEnabled={voiceEnabled}
         onVoiceToggle={handleVoiceToggle}
+        onLeaveRoom={() => connection?.reducers.leaveRoom({})}
       />
     </div>
   );

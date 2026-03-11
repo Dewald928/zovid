@@ -10,13 +10,4 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default __t.row({
-  id: __t.u64().primaryKey(),
-  roomId: __t.u64().name("room_id"),
-  groupId: __t.u64().name("group_id"),
-  x: __t.f64(),
-  y: __t.f64(),
-  width: __t.f64(),
-  height: __t.f64(),
-  obstacleType: __t.string().name("obstacle_type"),
-});
+export default {};

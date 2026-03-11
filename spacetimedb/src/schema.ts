@@ -4,9 +4,11 @@ export const Player = table(
   {
     name: 'player',
     public: true,
+    indexes: [{ name: 'player_room_id', accessor: 'player_room_id', algorithm: 'btree', columns: ['roomId'] }],
   },
   {
     identity: t.identity().primaryKey(),
+    roomId: t.u64(),
     x: t.f64(),
     y: t.f64(),
     dirX: t.f64(),
@@ -44,9 +46,11 @@ export const Obstacle = table(
   {
     name: 'obstacle',
     public: true,
+    indexes: [{ name: 'obstacle_room_id', accessor: 'obstacle_room_id', algorithm: 'btree', columns: ['roomId'] }],
   },
   {
     id: t.u64().primaryKey().autoInc(),
+    roomId: t.u64(),
     groupId: t.u64(),
     x: t.f64(),
     y: t.f64(),
@@ -60,9 +64,11 @@ export const BotZombie = table(
   {
     name: 'bot_zombie',
     public: true,
+    indexes: [{ name: 'bot_zombie_room_id', accessor: 'bot_zombie_room_id', algorithm: 'btree', columns: ['roomId'] }],
   },
   {
     id: t.u64().primaryKey().autoInc(),
+    roomId: t.u64(),
     x: t.f64(),
     y: t.f64(),
     dirX: t.f64(),

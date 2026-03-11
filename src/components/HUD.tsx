@@ -20,6 +20,7 @@ interface HUDProps {
   pingMs?: number | null;
   voiceEnabled?: boolean;
   onVoiceToggle?: () => void;
+  onLeaveRoom?: () => void;
 }
 
 /** Fire this from anywhere that calls useZombieAbility so the HUD bar animates immediately. */
@@ -97,6 +98,7 @@ export function HUD({
   pingMs = null,
   voiceEnabled,
   onVoiceToggle,
+  onLeaveRoom,
 }: HUDProps) {
   const [tick, setTick] = useState(0);
   const [nameInput, setNameInput] = useState("");
@@ -206,6 +208,16 @@ export function HUD({
 
   return (
     <div className="hud">
+      {onLeaveRoom && (
+        <button
+          type="button"
+          className="hud-leave-btn"
+          onClick={onLeaveRoom}
+          aria-label="Back to menu"
+        >
+          ← Menu
+        </button>
+      )}
       {isZombie && roundActive && (
         <div className="hud-ability-bar-wrap" aria-label="Ability charge">
           <div className="hud-ability-bar-track">

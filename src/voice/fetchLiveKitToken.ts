@@ -5,7 +5,8 @@
 const API_PATH = '/api/livekit-token';
 
 export interface LiveKitTokenParams {
-  room: 'zovid-human' | 'zovid-zombie';
+  /** Room name, e.g. zovid-1-human, zovid-1-zombie (room-scoped for multi-lobby voice) */
+  room: string;
   participantIdentity: string;
   participantName?: string;
 }

@@ -10,6 +10,17 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const BotZombie = __t.object("BotZombie", {
+  id: __t.u64(),
+  x: __t.f64(),
+  y: __t.f64(),
+  dirX: __t.f64(),
+  dirY: __t.f64(),
+  speedBoostUntilMicros: __t.u64(),
+  abilityCooldownUntilMicros: __t.u64(),
+});
+export type BotZombie = __Infer<typeof BotZombie>;
+
 export const GameConfig = __t.object("GameConfig", {
   id: __t.u64(),
   roundActive: __t.bool(),
@@ -17,9 +28,11 @@ export const GameConfig = __t.object("GameConfig", {
   roundStartMicros: __t.u64(),
   roundEndMicros: __t.u64(),
   lastTickMicros: __t.u64(),
+  lastBotZombieSpawnMicros: __t.u64(),
   mapWidth: __t.f64(),
   mapHeight: __t.f64(),
   roundWinner: __t.option(__t.string()),
+  gameMode: __t.option(__t.string()),
 });
 export type GameConfig = __Infer<typeof GameConfig>;
 
@@ -41,6 +54,7 @@ export const Player = __t.object("Player", {
   dirX: __t.f64(),
   dirY: __t.f64(),
   isZombie: __t.bool(),
+  isBot: __t.bool(),
   name: __t.string(),
   score: __t.u64(),
   speedBoostUntilMicros: __t.u64(),

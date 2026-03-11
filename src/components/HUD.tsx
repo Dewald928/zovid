@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import type { Player, GameConfig } from "../module_bindings/types";
+import type { Player, GameConfig, BotZombie } from "../module_bindings/types";
 import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../module_bindings";
 import { DonationPanel } from "./DonationPanel";
@@ -14,6 +14,7 @@ const CHARGE_DURATION_MS = COOLDOWN_DURATION_MS - BOOST_DURATION_MS; // 12s
 interface HUDProps {
   players: Player[];
   config: GameConfig | null;
+  botZombies?: BotZombie[];
   localIdentity?: Identity;
   connection: DbConnection | null;
   pingMs?: number | null;
@@ -91,6 +92,7 @@ export function HUD({
   players,
   config,
   localIdentity,
+  botZombies = [],
   connection,
   pingMs = null,
   voiceEnabled,
@@ -104,7 +106,9 @@ export function HUD({
   const humans = players.filter((p) => !p.isZombie);
   const zombies = players.filter((p) => p.isZombie);
   const humanCount = humans.length;
-  const zombieCount = zombies.length;
+  const zombieCount =
+    zombies.length +
+    (config?.gameMode === "vs_bots" ? botZombies.length : 0);
 
   const localPlayer = localIdentity
     ? players.find(

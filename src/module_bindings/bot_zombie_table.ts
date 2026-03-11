@@ -11,15 +11,11 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  identity: __t.identity().primaryKey(),
+  id: __t.u64().primaryKey(),
   x: __t.f64(),
   y: __t.f64(),
   dirX: __t.f64().name("dir_x"),
   dirY: __t.f64().name("dir_y"),
-  isZombie: __t.bool().name("is_zombie"),
-  isBot: __t.bool().name("is_bot"),
-  name: __t.string(),
-  score: __t.u64(),
   speedBoostUntilMicros: __t.u64().name("speed_boost_until_micros"),
   abilityCooldownUntilMicros: __t.u64().name("ability_cooldown_until_micros"),
 });

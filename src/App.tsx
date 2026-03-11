@@ -19,6 +19,7 @@ function App() {
   const [players] = useTable(tables.Player);
   const [configRows] = useTable(tables.GameConfig);
   const [obstacles] = useTable(tables.Obstacle);
+  const [botZombies] = useTable(tables.BotZombie);
 
   const [pingMs, setPingMs] = React.useState<number | null>(null);
 
@@ -83,11 +84,15 @@ function App() {
       players: players ? [...players] : [],
       config,
       obstacles: obstacles ? [...obstacles] : [],
+      botZombies: botZombies ? [...botZombies] : [],
     });
-  }, [players, config, obstacles]);
+  }, [players, config, obstacles, botZombies]);
+
+  const gameMode = config?.gameMode;
+  const showGame = isActive && (gameMode === 'vs_humans' || gameMode === 'vs_bots');
 
   useEffect(() => {
-    if (!containerRef.current || !isActive) return;
+    if (!containerRef.current || !showGame) return;
     const container = containerRef.current;
     // Wait one frame so the container has layout and dimensions (100dvh etc.)
     const id = requestAnimationFrame(() => {
@@ -121,7 +126,7 @@ function App() {
       gameRef.current?.destroy(true);
       gameRef.current = null;
     };
-  }, [isActive]);
+  }, [showGame]);
 
   useEffect(() => {
     setLocalIdentity(identity ? identity.toHexString() : null);
@@ -165,6 +170,39 @@ function App() {
     );
   }
 
+  if (!gameMode) {
+    return (
+      <div className="app app-menu">
+        <div className="app-menu-bg" aria-hidden="true" />
+        <div className="app-menu-content">
+          <h1 className="app-menu-title">
+            <span className="app-menu-title-main">ZOVID</span>
+            <span className="app-menu-title-sub">Outlast the horde</span>
+          </h1>
+          <p className="app-menu-subtitle">Choose your fight</p>
+          <div className="app-menu-buttons">
+            <button
+              type="button"
+              className="app-menu-btn app-menu-btn-humans"
+              onClick={() => connection?.reducers.setGameMode({ mode: 'vs_humans' })}
+            >
+              <span className="app-menu-btn-label">Vs Humans</span>
+              <span className="app-menu-btn-desc">Multiplayer — infect or survive</span>
+            </button>
+            <button
+              type="button"
+              className="app-menu-btn app-menu-btn-bots"
+              onClick={() => connection?.reducers.setGameMode({ mode: 'vs_bots' })}
+            >
+              <span className="app-menu-btn-label">Vs Bots</span>
+              <span className="app-menu-btn-desc">Multiplayer survival — endless zombie waves</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleVoiceToggle = () => {
     setVoiceEnabled((v) => {
       const next = !v;
@@ -179,6 +217,7 @@ function App() {
       <HUD
         players={players ? [...players] : []}
         config={config}
+        botZombies={botZombies ? [...botZombies] : []}
         localIdentity={identity ?? undefined}
         connection={connection ?? null}
         pingMs={pingMs}

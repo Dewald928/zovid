@@ -17,7 +17,9 @@ export default __t.row({
   roundStartMicros: __t.u64().name("round_start_micros"),
   roundEndMicros: __t.u64().name("round_end_micros"),
   lastTickMicros: __t.u64().name("last_tick_micros"),
+  lastBotZombieSpawnMicros: __t.u64().name("last_bot_zombie_spawn_micros"),
   mapWidth: __t.f64().name("map_width"),
   mapHeight: __t.f64().name("map_height"),
   roundWinner: __t.option(__t.string()).name("round_winner"),
+  gameMode: __t.option(__t.string()).name("game_mode"),
 });

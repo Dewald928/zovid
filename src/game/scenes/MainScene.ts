@@ -34,6 +34,7 @@ export class MainScene extends Phaser.Scene {
   private playerSprites!: Map<string, Phaser.GameObjects.Rectangle>;
   private playerBoostGlows!: Map<string, Phaser.GameObjects.Rectangle>;
   private playerNames!: Map<string, Phaser.GameObjects.Text>;
+  private botZombieSprites!: Map<string, Phaser.GameObjects.Rectangle>;
   private fogSprite!: Phaser.GameObjects.Image;
   private arenaGraphics!: Phaser.GameObjects.Graphics;
   private obstacleGraphics!: Phaser.GameObjects.Graphics;
@@ -184,6 +185,7 @@ export class MainScene extends Phaser.Scene {
     this.playerSprites = new Map();
     this.playerBoostGlows = new Map();
     this.playerNames = new Map();
+    this.botZombieSprites = new Map();
     const mapW = 2000;
     const mapH = 2000;
 
@@ -326,7 +328,7 @@ export class MainScene extends Phaser.Scene {
   update(_time: number, _delta: number): void {
     this.localIdentityHex = getLocalIdentity();
     const conn = getConnection();
-    const { players, config } = getGameState();
+    const { players, config, botZombies = [] } = getGameState();
 
     const mapW = config?.mapWidth ?? 2000;
     const mapH = config?.mapHeight ?? 2000;
@@ -487,6 +489,27 @@ export class MainScene extends Phaser.Scene {
           nameText.destroy();
           this.playerNames.delete(key);
         }
+      }
+    }
+
+    const botZombieSeen = new Set<string>();
+    for (const bz of botZombies) {
+      const key = `bot-${bz.id.toString()}`;
+      botZombieSeen.add(key);
+      let rect = this.botZombieSprites.get(key);
+      if (!rect) {
+        rect = this.add.rectangle(bz.x, bz.y, PLAYER_SIZE, PLAYER_SIZE, ZOMBIE_COLOR);
+        rect.setDepth(100);
+        this.botZombieSprites.set(key, rect);
+      }
+      rect.x = Phaser.Math.Linear(rect.x, bz.x, LERP);
+      rect.y = Phaser.Math.Linear(rect.y, bz.y, LERP);
+      rect.setFillStyle(ZOMBIE_COLOR);
+    }
+    for (const [key, rect] of this.botZombieSprites) {
+      if (!botZombieSeen.has(key)) {
+        rect.destroy();
+        this.botZombieSprites.delete(key);
       }
     }
 

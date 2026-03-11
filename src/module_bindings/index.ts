@@ -34,6 +34,7 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import SetGameModeReducer from "./set_game_mode_reducer";
 import SetInputReducer from "./set_input_reducer";
 import SetNameReducer from "./set_name_reducer";
 import TickReducer from "./tick_reducer";
@@ -43,6 +44,7 @@ import UseZombieAbilityReducer from "./use_zombie_ability_reducer";
 import * as PingProcedure from "./ping_procedure";
 
 // Import all table schema definitions
+import BotZombieRow from "./bot_zombie_table";
 import GameConfigRow from "./game_config_table";
 import ObstacleRow from "./obstacle_table";
 import PlayerRow from "./player_table";
@@ -51,6 +53,17 @@ import PlayerRow from "./player_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  BotZombie: __table({
+    name: 'bot_zombie',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'bot_zombie_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, BotZombieRow),
   GameConfig: __table({
     name: 'game_config',
     indexes: [
@@ -88,6 +101,7 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("set_game_mode", SetGameModeReducer),
   __reducerSchema("set_input", SetInputReducer),
   __reducerSchema("set_name", SetNameReducer),
   __reducerSchema("tick", TickReducer),

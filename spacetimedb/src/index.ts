@@ -1,5 +1,5 @@
 import { schema, t, SenderError } from "spacetimedb/server";
-import { Player, GameConfig, Obstacle } from "./schema";
+import { Player, GameConfig, Obstacle, BotZombie } from "./schema";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const HUMAN_SPEED = 200.0;
@@ -14,6 +14,11 @@ const ZOMBIE_ABILITY_COOLDOWN_MICROS = 15n * 1_000_000n; // 15 seconds
 const BASE_MAP_SIZE = 2000.0;
 const MIN_PLAYERS_TO_START = 1;
 const TICK_DT_SEC = Number(TICK_MICROS) / 1_000_000;
+
+// Vs bots: zombie spawn ramp (deterministic)
+const BOT_SPAWN_BASE_INTERVAL_MICROS = 8n * 1_000_000n; // 8 seconds at start
+const BOT_SPAWN_MIN_INTERVAL_MICROS = 1_500_000n; // 1.5 seconds min
+const BOT_SPAWN_RAMP_MICROS_PER_SEC = 50_000n; // interval decreases by 50ms per real second
 
 function mapSizeForPlayers(count: number): number {
   if (count <= 0) return BASE_MAP_SIZE;
@@ -399,7 +404,7 @@ function generateAllObstacles(
   generateTrees(ctx, roundNum, 0, numTrees, mapW, mapH);
 }
 
-const spacetimedb = schema({ Player, GameConfig, Obstacle });
+const spacetimedb = schema({ Player, GameConfig, Obstacle, BotZombie });
 export default spacetimedb;
 
 // ─── ping: no-op procedure for client connection RTT measurement ─
@@ -430,9 +435,15 @@ export const tick = spacetimedb.reducer((ctx) => {
     const mapW = config.mapWidth;
     const mapH = config.mapHeight;
     const newRound = config.roundNumber + 1n;
+    const vsBots = config.gameMode === "vs_bots";
+    if (vsBots) {
+      for (const bz of ctx.db.BotZombie.iter()) {
+        ctx.db.BotZombie.id.delete(bz.id);
+      }
+    }
     generateAllObstacles(ctx, newRound, mapW, mapH);
     const obstacles = [...ctx.db.Obstacle.iter()];
-    const firstIdx = Number(newRound % BigInt(players.length));
+    const firstIdx = vsBots ? -1 : Number(newRound % BigInt(players.length));
     for (let i = 0; i < players.length; i++) {
       const p = players[i];
       const seed = `${newRound}-${i}-${p.identity.toHexString()}`;
@@ -455,7 +466,8 @@ export const tick = spacetimedb.reducer((ctx) => {
         y,
         dirX: 0,
         dirY: 0,
-        isZombie: i === firstIdx,
+        isZombie: vsBots ? false : i === firstIdx,
+        isBot: false,
         score: 0n,
         speedBoostUntilMicros: 0n,
         abilityCooldownUntilMicros: 0n,
@@ -468,6 +480,7 @@ export const tick = spacetimedb.reducer((ctx) => {
       roundStartMicros: now,
       roundEndMicros: 0n,
       lastTickMicros: now,
+      lastBotZombieSpawnMicros: vsBots ? now : config.lastBotZombieSpawnMicros,
       roundWinner: undefined,
     });
     return;
@@ -481,13 +494,18 @@ export const tick = spacetimedb.reducer((ctx) => {
   if (!config.roundActive) {
     // If roundEndMicros > 0, we're in the post-round delay — wait for reset logic above
     if (config.roundEndMicros > 0n) return;
+    // Do not start a round until user has chosen a mode (main menu)
+    if (config.gameMode !== "vs_humans" && config.gameMode !== "vs_bots") return;
     const players = [...ctx.db.Player.iter()];
-    if (players.length >= MIN_PLAYERS_TO_START) {
+    const vsBots = config.gameMode === "vs_bots";
+    const minPlayers = vsBots ? 1 : MIN_PLAYERS_TO_START;
+    if (players.length >= minPlayers) {
       const newRoundNum = config.roundNumber + 1n;
       generateAllObstacles(ctx, newRoundNum, config.mapWidth, config.mapHeight);
       for (const p of players) {
         ctx.db.Player.identity.update({
           ...p,
+          ...(vsBots ? { isZombie: false, isBot: false } : {}),
           score: 0n,
           speedBoostUntilMicros: 0n,
           abilityCooldownUntilMicros: 0n,
@@ -499,6 +517,7 @@ export const tick = spacetimedb.reducer((ctx) => {
         roundNumber: newRoundNum,
         roundStartMicros: now,
         lastTickMicros: now,
+        lastBotZombieSpawnMicros: vsBots ? now : config.lastBotZombieSpawnMicros,
         roundWinner: undefined,
       });
     }
@@ -509,8 +528,104 @@ export const tick = spacetimedb.reducer((ctx) => {
   const mapW = cfg.mapWidth;
   const mapH = cfg.mapHeight;
   const obstacles = [...ctx.db.Obstacle.iter()];
+  const vsBots = cfg.gameMode === "vs_bots";
+
+  if (vsBots) {
+    // Spawn ramp: insert BotZombie at edge when interval elapsed
+    const elapsedMicros = now - cfg.roundStartMicros;
+    const elapsedSec = Number(elapsedMicros) / 1_000_000;
+    const rampDecrease = BigInt(Math.floor(elapsedSec * Number(BOT_SPAWN_RAMP_MICROS_PER_SEC)));
+    const intervalMicros =
+      BOT_SPAWN_BASE_INTERVAL_MICROS - rampDecrease < BOT_SPAWN_MIN_INTERVAL_MICROS
+        ? BOT_SPAWN_MIN_INTERVAL_MICROS
+        : BOT_SPAWN_BASE_INTERVAL_MICROS - rampDecrease;
+    if (now - cfg.lastBotZombieSpawnMicros >= intervalMicros) {
+      const botCount = [...ctx.db.BotZombie.iter()].length;
+      const seedBase = `botspawn-${cfg.roundStartMicros}-${botCount}`;
+      const edge = Math.floor(deterministicHash(seedBase) * 4); // 0..3
+      const t = 50;
+      let x: number, y: number;
+      if (edge === 0) {
+        x = t + deterministicHash(seedBase + "x") * (mapW - 2 * t);
+        y = t;
+      } else if (edge === 1) {
+        x = mapW - t;
+        y = t + deterministicHash(seedBase + "y") * (mapH - 2 * t);
+      } else if (edge === 2) {
+        x = t + deterministicHash(seedBase + "x") * (mapW - 2 * t);
+        y = mapH - t;
+      } else {
+        x = t;
+        y = t + deterministicHash(seedBase + "y") * (mapH - 2 * t);
+      }
+      let tries = 0;
+      while (collidesWithObstacle(obstacles, x, y, PLAYER_HALF) && tries < 20) {
+        tries++;
+        x = Math.max(t, Math.min(mapW - t, x + (tries % 2 === 0 ? 40 : -40)));
+        y = Math.max(t, Math.min(mapH - t, y + (tries % 3 === 0 ? 40 : -40)));
+      }
+      if (!collidesWithObstacle(obstacles, x, y, PLAYER_HALF)) {
+        ctx.db.BotZombie.insert({
+          id: 0n,
+          x,
+          y,
+          dirX: 0,
+          dirY: 0,
+          speedBoostUntilMicros: 0n,
+          abilityCooldownUntilMicros: 0n,
+        });
+        ctx.db.GameConfig.id.update({
+          ...cfg,
+          lastBotZombieSpawnMicros: now,
+        });
+      }
+    }
+  }
+
+  // AI: set direction toward nearest human for bot zombies (vs_bots only)
+  const allPlayersSnap = [...ctx.db.Player.iter()];
+  const humansSnap = allPlayersSnap.filter((p) => !p.isZombie);
+  if (vsBots && humansSnap.length > 0) {
+    for (const p of allPlayersSnap) {
+      if (p.isZombie && p.isBot) {
+        let bestD2 = Infinity;
+        let hx = 0;
+        let hy = 0;
+        for (const h of humansSnap) {
+          const d2 = (h.x - p.x) ** 2 + (h.y - p.y) ** 2;
+          if (d2 < bestD2) {
+            bestD2 = d2;
+            hx = h.x;
+            hy = h.y;
+          }
+        }
+        const dx = hx - p.x;
+        const dy = hy - p.y;
+        const { x: ndx, y: ndy } = normalizeDir(dx, dy);
+        ctx.db.Player.identity.update({ ...p, dirX: ndx, dirY: ndy });
+      }
+    }
+    for (const bz of ctx.db.BotZombie.iter()) {
+      let bestD2 = Infinity;
+      let hx = 0;
+      let hy = 0;
+      for (const h of humansSnap) {
+        const d2 = (h.x - bz.x) ** 2 + (h.y - bz.y) ** 2;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          hx = h.x;
+          hy = h.y;
+        }
+      }
+      const dx = hx - bz.x;
+      const dy = hy - bz.y;
+      const { x: ndx, y: ndy } = normalizeDir(dx, dy);
+      ctx.db.BotZombie.id.update({ ...bz, dirX: ndx, dirY: ndy });
+    }
+  }
 
   // Move all players (with obstacle collision and axis-sliding)
+  const cfgAfterSpawn = ctx.db.GameConfig.id.find(0n)!;
   for (const p of ctx.db.Player.iter()) {
     const { x: dx, y: dy } = normalizeDir(p.dirX, p.dirY);
     const zombieSpeed =
@@ -537,51 +652,113 @@ export const tick = spacetimedb.reducer((ctx) => {
     ctx.db.Player.identity.update({ ...p, x: nx, y: ny });
   }
 
+  // Move BotZombies (vs_bots)
+  if (vsBots) {
+    for (const bz of ctx.db.BotZombie.iter()) {
+      const { x: dx, y: dy } = normalizeDir(bz.dirX, bz.dirY);
+      const speed = ZOMBIE_SPEED;
+      let nx = bz.x + dx * speed * TICK_DT_SEC;
+      let ny = bz.y + dy * speed * TICK_DT_SEC;
+      nx = Math.max(0, Math.min(mapW, nx));
+      ny = Math.max(0, Math.min(mapH, ny));
+      if (collidesWithObstacle(obstacles, nx, ny, PLAYER_HALF)) {
+        const tryX = collidesWithObstacle(obstacles, nx, bz.y, PLAYER_HALF);
+        const tryY = collidesWithObstacle(obstacles, bz.x, ny, PLAYER_HALF);
+        if (!tryX) {
+          ny = bz.y;
+        } else if (!tryY) {
+          nx = bz.x;
+        } else {
+          nx = bz.x;
+          ny = bz.y;
+        }
+      }
+      ctx.db.BotZombie.id.update({ ...bz, x: nx, y: ny });
+    }
+  }
+
   // Infection
   const players = [...ctx.db.Player.iter()];
   const zombies = players.filter((p) => p.isZombie);
   const humans = players.filter((p) => !p.isZombie);
   const infectedThisTick = new Set<string>();
 
-  for (const z of zombies) {
-    let infectedCount = 0;
-    for (const h of humans) {
-      const key = h.identity.toHexString();
-      if (infectedThisTick.has(key)) continue;
-      if (Math.hypot(h.x - z.x, h.y - z.y) < INFECTION_RADIUS) {
-        ctx.db.Player.identity.update({ ...h, isZombie: true });
-        infectedThisTick.add(key);
-        infectedCount++;
+  if (vsBots) {
+    const botZombies = [...ctx.db.BotZombie.iter()];
+    for (const z of zombies) {
+      let infectedCount = 0;
+      for (const h of humans) {
+        const key = h.identity.toHexString();
+        if (infectedThisTick.has(key)) continue;
+        if (Math.hypot(h.x - z.x, h.y - z.y) < INFECTION_RADIUS) {
+          ctx.db.Player.identity.update({ ...h, isZombie: true, isBot: true });
+          infectedThisTick.add(key);
+          infectedCount++;
+        }
+      }
+      if (infectedCount > 0) {
+        const currentZ = ctx.db.Player.identity.find(z.identity)!;
+        ctx.db.Player.identity.update({
+          ...currentZ,
+          score: currentZ.score + BigInt(infectedCount),
+        });
       }
     }
-    if (infectedCount > 0) {
-      const currentZ = ctx.db.Player.identity.find(z.identity)!;
-      ctx.db.Player.identity.update({
-        ...currentZ,
-        score: currentZ.score + BigInt(infectedCount),
-      });
+    for (const z of botZombies) {
+      for (const h of humans) {
+        const key = h.identity.toHexString();
+        if (infectedThisTick.has(key)) continue;
+        if (Math.hypot(h.x - z.x, h.y - z.y) < INFECTION_RADIUS) {
+          ctx.db.Player.identity.update({ ...h, isZombie: true, isBot: true });
+          infectedThisTick.add(key);
+        }
+      }
+    }
+  } else {
+    for (const z of zombies) {
+      let infectedCount = 0;
+      for (const h of humans) {
+        const key = h.identity.toHexString();
+        if (infectedThisTick.has(key)) continue;
+        if (Math.hypot(h.x - z.x, h.y - z.y) < INFECTION_RADIUS) {
+          ctx.db.Player.identity.update({ ...h, isZombie: true });
+          infectedThisTick.add(key);
+          infectedCount++;
+        }
+      }
+      if (infectedCount > 0) {
+        const currentZ = ctx.db.Player.identity.find(z.identity)!;
+        ctx.db.Player.identity.update({
+          ...currentZ,
+          score: currentZ.score + BigInt(infectedCount),
+        });
+      }
     }
   }
 
   // Round end: timer expiry (humans win) or 0 humans (zombies win)
-  const allPlayers = [...ctx.db.Player.iter()];
-  const humansLeft = allPlayers.filter((p) => !p.isZombie);
-  const timerExpired = now - cfg.roundStartMicros >= ROUND_DURATION_MICROS;
+  const allPlayersFinal = [...ctx.db.Player.iter()];
+  const humansLeft = allPlayersFinal.filter((p) => !p.isZombie);
+  const timerExpired = now - cfgAfterSpawn.roundStartMicros >= ROUND_DURATION_MICROS;
 
   if (timerExpired && humansLeft.length >= 1) {
     ctx.db.GameConfig.id.update({
-      ...cfg,
+      ...cfgAfterSpawn,
       roundActive: false,
       roundEndMicros: now,
       roundWinner: "humans",
     });
-  } else if (humansLeft.length === 0 && allPlayers.length >= 2) {
-    ctx.db.GameConfig.id.update({
-      ...cfg,
-      roundActive: false,
-      roundEndMicros: now,
-      roundWinner: "zombies",
-    });
+  } else if (humansLeft.length === 0) {
+    const zombiesWin =
+      !vsBots ? allPlayersFinal.length >= 2 : true;
+    if (zombiesWin) {
+      ctx.db.GameConfig.id.update({
+        ...cfgAfterSpawn,
+        roundActive: false,
+        roundEndMicros: now,
+        roundWinner: "zombies",
+      });
+    }
   }
 });
 
@@ -590,7 +767,7 @@ export const set_input = spacetimedb.reducer(
   { dirX: t.f64(), dirY: t.f64() },
   (ctx, { dirX, dirY }) => {
     const player = ctx.db.Player.identity.find(ctx.sender);
-    if (!player) return;
+    if (!player || player.isBot) return; // server drives bot zombies
     const { x, y } = normalizeDir(dirX, dirY);
     ctx.db.Player.identity.update({ ...player, dirX: x, dirY: y });
   },
@@ -631,6 +808,57 @@ export const set_name = spacetimedb.reducer(
   },
 );
 
+// ─── set_game_mode: choose vs_humans or vs_bots (shows main menu until set) ─
+export const set_game_mode = spacetimedb.reducer(
+  { mode: t.string() },
+  (ctx, { mode }) => {
+    if (mode !== "vs_humans" && mode !== "vs_bots") {
+      throw new SenderError("mode must be vs_humans or vs_bots");
+    }
+    const config = ctx.db.GameConfig.id.find(0n);
+    if (!config) return;
+    const alreadyHasMode = config.gameMode === "vs_humans" || config.gameMode === "vs_bots";
+    if (alreadyHasMode && config.roundActive) return; // do not change mode during round
+    ctx.db.GameConfig.id.update({
+      ...config,
+      gameMode: mode,
+      lastBotZombieSpawnMicros: 0n,
+      // If user was on menu (no mode set), clear any stale round so next tick can start fresh
+      ...(alreadyHasMode ? {} : { roundActive: false, roundEndMicros: 0n }),
+    });
+    if (mode === "vs_bots") {
+      const players = [...ctx.db.Player.iter()];
+      if (players.length >= 1 && !config.roundActive && config.roundEndMicros === 0n) {
+        const now = ctx.timestamp.microsSinceUnixEpoch;
+        const newRoundNum = config.roundNumber + 1n;
+        generateAllObstacles(ctx, newRoundNum, config.mapWidth, config.mapHeight);
+        for (const p of players) {
+          ctx.db.Player.identity.update({
+            ...p,
+            isZombie: false,
+            isBot: false,
+            score: 0n,
+            speedBoostUntilMicros: 0n,
+            abilityCooldownUntilMicros: 0n,
+          });
+        }
+        const updated = ctx.db.GameConfig.id.find(0n)!;
+        ctx.db.GameConfig.id.update({
+          ...updated,
+          gameMode: "vs_bots",
+          roundActive: true,
+          roundNumber: newRoundNum,
+          roundStartMicros: now,
+          roundEndMicros: 0n,
+          lastTickMicros: now,
+          lastBotZombieSpawnMicros: now,
+          roundWinner: undefined,
+        });
+      }
+    }
+  },
+);
+
 // ─── Init ─────────────────────────────────────────────────────────────────
 export const init = spacetimedb.init((ctx) => {
   if (!ctx.db.GameConfig.id.find(0n)) {
@@ -641,9 +869,11 @@ export const init = spacetimedb.init((ctx) => {
       roundStartMicros: 0n,
       roundEndMicros: 0n,
       lastTickMicros: 0n,
+      lastBotZombieSpawnMicros: 0n,
       mapWidth: BASE_MAP_SIZE,
       mapHeight: BASE_MAP_SIZE,
       roundWinner: undefined,
+      gameMode: undefined,
     });
   }
 });
@@ -669,6 +899,8 @@ export const onConnect = spacetimedb.clientConnected((ctx) => {
 
   const players = [...ctx.db.Player.iter()];
   const isFirst = players.length === 0;
+  const vsBots = config?.gameMode === "vs_bots";
+  const spawnAsZombie = vsBots ? false : isFirst;
 
   ctx.db.Player.insert({
     identity: ctx.sender,
@@ -676,7 +908,8 @@ export const onConnect = spacetimedb.clientConnected((ctx) => {
     y,
     dirX: 0,
     dirY: 0,
-    isZombie: isFirst,
+    isZombie: spawnAsZombie,
+    isBot: false,
     name: "Player",
     score: 0n,
     speedBoostUntilMicros: 0n,
@@ -703,14 +936,33 @@ export const onDisconnect = spacetimedb.clientDisconnected((ctx) => {
   const players = [...ctx.db.Player.iter()];
   const zombies = players.filter((p) => p.isZombie);
   const config = ctx.db.GameConfig.id.find(0n);
-  if (config && zombies.length === 0 && players.length > 0) {
+
+  if (config && players.length === 0) {
+    // Everyone left — reset to main menu so next visit (e.g. after refresh) can choose mode again
+    for (const bz of ctx.db.BotZombie.iter()) {
+      ctx.db.BotZombie.id.delete(bz.id);
+    }
+    ctx.db.GameConfig.id.update({
+      ...config,
+      gameMode: undefined,
+      roundActive: false,
+      roundEndMicros: 0n,
+      lastBotZombieSpawnMicros: 0n,
+      roundWinner: undefined,
+    });
+  } else if (
+    config &&
+    config.gameMode !== "vs_bots" &&
+    zombies.length === 0 &&
+    players.length > 0
+  ) {
     const idx = Number(config.roundNumber % BigInt(players.length));
     const newZombie = players[idx];
     ctx.db.Player.identity.update({ ...newZombie, isZombie: true });
   }
 
   if (config && players.length > 0) {
-    const newSize = mapSizeForPlayers(players.length - 1);
+    const newSize = mapSizeForPlayers(players.length);
     ctx.db.GameConfig.id.update({
       ...config,
       mapWidth: newSize,

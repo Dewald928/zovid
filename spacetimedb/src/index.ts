@@ -531,7 +531,7 @@ export const tick = spacetimedb.reducer((ctx) => {
   const vsBots = cfg.gameMode === "vs_bots";
 
   if (vsBots) {
-    // Spawn ramp: insert BotZombie at edge when interval elapsed
+    // Spawn ramp: insert BotZombie when interval elapsed; pick position far from humans
     const elapsedMicros = now - cfg.roundStartMicros;
     const elapsedSec = Number(elapsedMicros) / 1_000_000;
     const rampDecrease = BigInt(Math.floor(elapsedSec * Number(BOT_SPAWN_RAMP_MICROS_PER_SEC)));
@@ -541,34 +541,40 @@ export const tick = spacetimedb.reducer((ctx) => {
         : BOT_SPAWN_BASE_INTERVAL_MICROS - rampDecrease;
     if (now - cfg.lastBotZombieSpawnMicros >= intervalMicros) {
       const botCount = [...ctx.db.BotZombie.iter()].length;
+      const humansForSpawn = [...ctx.db.Player.iter()].filter((p) => !p.isZombie);
+      const margin = 80;
       const seedBase = `botspawn-${cfg.roundStartMicros}-${botCount}`;
-      const edge = Math.floor(deterministicHash(seedBase) * 4); // 0..3
-      const t = 50;
-      let x: number, y: number;
-      if (edge === 0) {
-        x = t + deterministicHash(seedBase + "x") * (mapW - 2 * t);
-        y = t;
-      } else if (edge === 1) {
-        x = mapW - t;
-        y = t + deterministicHash(seedBase + "y") * (mapH - 2 * t);
-      } else if (edge === 2) {
-        x = t + deterministicHash(seedBase + "x") * (mapW - 2 * t);
-        y = mapH - t;
-      } else {
-        x = t;
-        y = t + deterministicHash(seedBase + "y") * (mapH - 2 * t);
+      const numCandidates = 16;
+      let bestX = margin + deterministicHash(seedBase) * (mapW - 2 * margin);
+      let bestY = margin + deterministicHash(seedBase + "y") * (mapH - 2 * margin);
+      let bestMinD2 = 0;
+      for (let i = 0; i < numCandidates; i++) {
+        const seed = `${seedBase}-${i}`;
+        const x = margin + deterministicHash(seed) * (mapW - 2 * margin);
+        const y = margin + deterministicHash(seed + "y") * (mapH - 2 * margin);
+        if (collidesWithObstacle(obstacles, x, y, PLAYER_HALF)) continue;
+        let minD2 = Infinity;
+        if (humansForSpawn.length > 0) {
+          for (const h of humansForSpawn) {
+            const d2 = (h.x - x) ** 2 + (h.y - y) ** 2;
+            if (d2 < minD2) minD2 = d2;
+          }
+        } else {
+          const cx = mapW / 2;
+          const cy = mapH / 2;
+          minD2 = (cx - x) ** 2 + (cy - y) ** 2;
+        }
+        if (minD2 > bestMinD2) {
+          bestMinD2 = minD2;
+          bestX = x;
+          bestY = y;
+        }
       }
-      let tries = 0;
-      while (collidesWithObstacle(obstacles, x, y, PLAYER_HALF) && tries < 20) {
-        tries++;
-        x = Math.max(t, Math.min(mapW - t, x + (tries % 2 === 0 ? 40 : -40)));
-        y = Math.max(t, Math.min(mapH - t, y + (tries % 3 === 0 ? 40 : -40)));
-      }
-      if (!collidesWithObstacle(obstacles, x, y, PLAYER_HALF)) {
+      if (!collidesWithObstacle(obstacles, bestX, bestY, PLAYER_HALF)) {
         ctx.db.BotZombie.insert({
           id: 0n,
-          x,
-          y,
+          x: bestX,
+          y: bestY,
           dirX: 0,
           dirY: 0,
           speedBoostUntilMicros: 0n,

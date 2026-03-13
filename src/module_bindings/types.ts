@@ -19,6 +19,8 @@ export const BotZombie = __t.object("BotZombie", {
   dirY: __t.f64(),
   speedBoostUntilMicros: __t.u64(),
   abilityCooldownUntilMicros: __t.u64(),
+  health: __t.u32(),
+  maxHealth: __t.u32(),
 });
 export type BotZombie = __Infer<typeof BotZombie>;
 
@@ -62,6 +64,9 @@ export const Player = __t.object("Player", {
   score: __t.u64(),
   speedBoostUntilMicros: __t.u64(),
   abilityCooldownUntilMicros: __t.u64(),
+  health: __t.u32(),
+  maxHealth: __t.u32(),
+  weaponCooldownUntilMicros: __t.u64(),
 });
 export type Player = __Infer<typeof Player>;
 

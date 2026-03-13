@@ -6,6 +6,7 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import FireWeaponReducer from "../fire_weapon_reducer";
 import JoinRoomReducer from "../join_room_reducer";
 import LeaveRoomReducer from "../leave_room_reducer";
 import SetInputReducer from "../set_input_reducer";
@@ -13,6 +14,7 @@ import SetNameReducer from "../set_name_reducer";
 import TickReducer from "../tick_reducer";
 import UseZombieAbilityReducer from "../use_zombie_ability_reducer";
 
+export type FireWeaponParams = __Infer<typeof FireWeaponReducer>;
 export type JoinRoomParams = __Infer<typeof JoinRoomReducer>;
 export type LeaveRoomParams = __Infer<typeof LeaveRoomReducer>;
 export type SetInputParams = __Infer<typeof SetInputReducer>;

@@ -95,7 +95,7 @@ function App() {
   }, [roomPlayers, config, roomObstacles, roomBotZombies]);
 
   const gameMode = config?.gameMode;
-  const showGame = isActive && !inMenu && (gameMode === 'vs_humans' || gameMode === 'vs_bots');
+  const showGame = isActive && !inMenu && (gameMode === 'vs_humans' || gameMode === 'vs_bots' || gameMode === 'survival');
 
   useEffect(() => {
     if (!containerRef.current || !showGame) return;
@@ -203,6 +203,14 @@ function App() {
             >
               <span className="app-menu-btn-label">Vs Bots</span>
               <span className="app-menu-btn-desc">Multiplayer survival — endless zombie waves</span>
+            </button>
+            <button
+              type="button"
+              className="app-menu-btn app-menu-btn-survival"
+              onClick={() => connection?.reducers.joinRoom({ mode: 'survival' })}
+            >
+              <span className="app-menu-btn-label">Survival</span>
+              <span className="app-menu-btn-desc">Weapons, health, friendly fire — more zombies</span>
             </button>
           </div>
         </div>

@@ -19,6 +19,9 @@ export const Player = table(
     score: t.u64(),
     speedBoostUntilMicros: t.u64(),
     abilityCooldownUntilMicros: t.u64(),
+    health: t.u32(),
+    maxHealth: t.u32(),
+    weaponCooldownUntilMicros: t.u64(),
   }
 );
 
@@ -75,5 +78,7 @@ export const BotZombie = table(
     dirY: t.f64(),
     speedBoostUntilMicros: t.u64(),
     abilityCooldownUntilMicros: t.u64(),
+    health: t.u32(),
+    maxHealth: t.u32(),
   }
 );

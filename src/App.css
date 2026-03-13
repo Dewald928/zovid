@@ -183,6 +183,21 @@
 .app-menu-btn-bots:hover::before {
   opacity: 1;
 }
+.app-menu-btn-survival {
+  color: #ffe8e8;
+  background: linear-gradient(135deg, rgba(255, 80, 60, 0.25) 0%, rgba(180, 40, 40, 0.2) 100%);
+  border-color: rgba(255, 80, 60, 0.4);
+}
+.app-menu-btn-survival::before {
+  background: linear-gradient(135deg, rgba(255, 80, 60, 0.2) 0%, transparent 50%);
+}
+.app-menu-btn-survival:hover {
+  box-shadow: 0 8px 32px rgba(255, 80, 60, 0.25);
+  border-color: rgba(255, 80, 60, 0.6);
+}
+.app-menu-btn-survival:hover::before {
+  opacity: 1;
+}
 .app-menu-btn-label {
   font-size: 1.15rem;
   font-weight: 700;
@@ -310,6 +325,123 @@
 .hud-ability-btn:active {
   transform: scale(0.97);
 }
+/* Survival: health bar and weapon status — always at bottom */
+.hud-survival-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .hud-survival-wrap {
+    bottom: 1.5rem;
+  }
+}
+.hud-health-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.hud-health-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  min-width: 1.8rem;
+}
+.hud-health-bar-track {
+  width: 80px;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.hud-health-bar-fill {
+  height: 100%;
+  background: linear-gradient(to right, #c44, #a22);
+  border-radius: 5px;
+  transition: width 0.15s;
+}
+.hud-health-value {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+.hud-weapon-status {
+  font-size: 0.8rem;
+}
+.hud-weapon-ready {
+  color: #8f8;
+}
+.hud-weapon-cooldown {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Survival: shoot button bottom-left (mobile-friendly, hold to fire) */
+.hud-shoot-btn-wrap {
+  position: absolute;
+  left: 1rem;
+  bottom: 1.25rem;
+  pointer-events: auto;
+  z-index: 10;
+}
+.hud-shoot-btn {
+  min-width: 4.75rem;
+  min-height: 4.75rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(165deg, #e05858 0%, #b83a3a 45%, #8b2525 100%);
+  border: none;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.3),
+    0 0 0 3px rgba(255, 255, 255, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.hud-shoot-btn:hover {
+  background: linear-gradient(165deg, #ec6666 0%, #c94a4a 45%, #a02d2d 100%);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.25),
+    0 0 0 3px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 6px 18px rgba(0, 0, 0, 0.4);
+  transform: scale(1.03);
+}
+.hud-shoot-btn:active {
+  transform: scale(0.96);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.4),
+    0 0 0 3px rgba(255, 255, 255, 0.08),
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+@media (min-width: 768px) {
+  .hud-shoot-btn-wrap {
+    bottom: 1.5rem;
+    left: 1.25rem;
+  }
+  .hud-shoot-btn {
+    min-width: 4.25rem;
+    min-height: 4.25rem;
+    font-size: 0.88rem;
+    letter-spacing: 0.06em;
+  }
+}
+
 .hud-ability-btn-cooldown {
   background: linear-gradient(to bottom, #4a4a4a, #2a2a2a);
   color: rgba(255, 255, 255, 0.5);

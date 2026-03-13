@@ -18,7 +18,21 @@ const TICK_DT_SEC = Number(TICK_MICROS) / 1_000_000;
 const ROOM_ID_MENU = 0n;
 const ROOM_ID_VS_HUMANS = 1n;
 const ROOM_ID_VS_BOTS = 2n;
-const LOBBY_ROOM_IDS = [ROOM_ID_VS_HUMANS, ROOM_ID_VS_BOTS] as const;
+const ROOM_ID_SURVIVAL = 3n;
+const LOBBY_ROOM_IDS = [ROOM_ID_VS_HUMANS, ROOM_ID_VS_BOTS, ROOM_ID_SURVIVAL] as const;
+
+// Survival mode: health and weapon
+const PLAYER_MAX_HEALTH = 100;
+const ZOMBIE_MAX_HEALTH = 30;
+const WEAPON_DAMAGE = 25;
+const WEAPON_COOLDOWN_MICROS = 400_000n; // 0.4s
+const WEAPON_RANGE = 300;
+const WEAPON_HIT_RADIUS = 24; // max perpendicular distance from ray to count as hit (hitscan accuracy)
+const MELEE_DAMAGE = 10;
+const MELEE_RADIUS = 40; // same as INFECTION_RADIUS
+const SURVIVAL_SPAWN_BASE_INTERVAL_MICROS = 4n * 1_000_000n; // 4s at start
+const SURVIVAL_SPAWN_MIN_INTERVAL_MICROS = 800_000n; // 0.8s min
+const SURVIVAL_SPAWN_RAMP_MICROS_PER_SEC = 80_000n;
 
 // Room-scoped queries: use index when runtime exposes it, else fall back to iter + filter
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,6 +117,62 @@ function collidesWithObstacle(
     }
   }
   return false;
+}
+
+/** Returns distance along ray (origin + t*dir) at which ray first hits an obstacle, or maxDist+1 if none. */
+function rayObstacleFirstHit(
+  ox: number,
+  oy: number,
+  ux: number,
+  uy: number,
+  obstacles: ObstacleRow[],
+  maxDist: number,
+): number {
+  let bestT = maxDist + 1;
+  const inf = 1e9;
+  for (const o of obstacles) {
+    const bxMin = o.x - o.width / 2;
+    const bxMax = o.x + o.width / 2;
+    const byMin = o.y - o.height / 2;
+    const byMax = o.y + o.height / 2;
+    let tLoX: number;
+    let tHiX: number;
+    if (Math.abs(ux) < 1e-9) {
+      if (ox < bxMin || ox > bxMax) continue;
+      tLoX = -inf;
+      tHiX = inf;
+    } else {
+      tLoX = (bxMin - ox) / ux;
+      tHiX = (bxMax - ox) / ux;
+      if (ux < 0) {
+        const tmp = tLoX;
+        tLoX = tHiX;
+        tHiX = tmp;
+      }
+    }
+    let tLoY: number;
+    let tHiY: number;
+    if (Math.abs(uy) < 1e-9) {
+      if (oy < byMin || oy > byMax) continue;
+      tLoY = -inf;
+      tHiY = inf;
+    } else {
+      tLoY = (byMin - oy) / uy;
+      tHiY = (byMax - oy) / uy;
+      if (uy < 0) {
+        const tmp = tLoY;
+        tLoY = tHiY;
+        tHiY = tmp;
+      }
+    }
+    const tEntry = Math.max(tLoX, tLoY);
+    const tExit = Math.min(tHiX, tHiY);
+    if (tEntry <= tExit && tExit >= 0) {
+      const hitT = tEntry >= 0 ? tEntry : 0;
+      if (hitT < bestT) bestT = hitT;
+    }
+  }
+  return bestT;
 }
 
 function collidesWithCharacters(
@@ -488,14 +558,15 @@ export const tick = spacetimedb.reducer((ctx) => {
       const mapH = config.mapHeight;
       const newRound = config.roundNumber + 1n;
       const vsBots = config.gameMode === "vs_bots";
-      if (vsBots) {
+      const isSurvivalReset = config.gameMode === "survival";
+      if (vsBots || isSurvivalReset) {
         for (const bz of botZombiesInRoom(ctx, roomId)) {
           ctx.db.BotZombie.id.delete(bz.id);
         }
       }
       generateAllObstacles(ctx, roomId, newRound, mapW, mapH);
       const obstacles = obstaclesInRoom(ctx, roomId);
-      const firstIdx = vsBots ? -1 : Number(newRound % BigInt(players.length));
+      const firstIdx = vsBots || isSurvivalReset ? -1 : Number(newRound % BigInt(players.length));
       for (let i = 0; i < players.length; i++) {
         const p = players[i];
         const seed = `${newRound}-${i}-${p.identity.toHexString()}`;
@@ -518,11 +589,14 @@ export const tick = spacetimedb.reducer((ctx) => {
           y,
           dirX: 0,
           dirY: 0,
-          isZombie: vsBots ? false : i === firstIdx,
+          isZombie: vsBots || isSurvivalReset ? false : i === firstIdx,
           isBot: false,
           score: 0n,
           speedBoostUntilMicros: 0n,
           abilityCooldownUntilMicros: 0n,
+          health: isSurvivalReset ? PLAYER_MAX_HEALTH : p.health,
+          maxHealth: isSurvivalReset ? PLAYER_MAX_HEALTH : p.maxHealth,
+          weaponCooldownUntilMicros: isSurvivalReset ? 0n : p.weaponCooldownUntilMicros,
         });
       }
       ctx.db.GameConfig.id.update({
@@ -532,7 +606,7 @@ export const tick = spacetimedb.reducer((ctx) => {
         roundStartMicros: now,
         roundEndMicros: 0n,
         lastTickMicros: now,
-        lastBotZombieSpawnMicros: vsBots ? now : config.lastBotZombieSpawnMicros,
+        lastBotZombieSpawnMicros: vsBots || isSurvivalReset ? now : config.lastBotZombieSpawnMicros,
         roundWinner: undefined,
       });
       continue;
@@ -546,17 +620,20 @@ export const tick = spacetimedb.reducer((ctx) => {
     if (!config.roundActive) {
       // If roundEndMicros > 0, we're in the post-round delay — wait for reset logic above
       if (config.roundEndMicros > 0n) continue;
-      if (config.gameMode !== "vs_humans" && config.gameMode !== "vs_bots") continue;
+      if (config.gameMode !== "vs_humans" && config.gameMode !== "vs_bots" && config.gameMode !== "survival") continue;
       const players = playersInRoom(ctx, roomId);
       const vsBots = config.gameMode === "vs_bots";
-      const minPlayers = vsBots ? 1 : MIN_PLAYERS_TO_START;
+      const isSurvival = config.gameMode === "survival";
+      const minPlayers = vsBots || isSurvival ? 1 : MIN_PLAYERS_TO_START;
       if (players.length >= minPlayers) {
         const newRoundNum = config.roundNumber + 1n;
+        const isSurvivalStart = config.gameMode === "survival";
         generateAllObstacles(ctx, roomId, newRoundNum, config.mapWidth, config.mapHeight);
         for (const p of players) {
           ctx.db.Player.identity.update({
             ...p,
-            ...(vsBots ? { isZombie: false, isBot: false } : {}),
+            ...(vsBots || isSurvivalStart ? { isZombie: false, isBot: false } : {}),
+            ...(isSurvivalStart ? { health: PLAYER_MAX_HEALTH, maxHealth: PLAYER_MAX_HEALTH, weaponCooldownUntilMicros: 0n } : {}),
             score: 0n,
             speedBoostUntilMicros: 0n,
             abilityCooldownUntilMicros: 0n,
@@ -567,8 +644,9 @@ export const tick = spacetimedb.reducer((ctx) => {
           roundActive: true,
           roundNumber: newRoundNum,
           roundStartMicros: now,
+          roundEndMicros: 0n,
           lastTickMicros: now,
-          lastBotZombieSpawnMicros: vsBots ? now : config.lastBotZombieSpawnMicros,
+          lastBotZombieSpawnMicros: vsBots || isSurvivalStart ? now : config.lastBotZombieSpawnMicros,
           roundWinner: undefined,
         });
       }
@@ -580,16 +658,25 @@ export const tick = spacetimedb.reducer((ctx) => {
     const mapH = cfg.mapHeight;
     const obstacles = obstaclesInRoom(ctx, roomId);
     const vsBots = cfg.gameMode === "vs_bots";
+    const isSurvival = cfg.gameMode === "survival";
+    const isBotMode = vsBots || isSurvival;
 
-  if (vsBots) {
+  if (isBotMode) {
     // Spawn ramp: insert BotZombie when interval elapsed; pick position far from humans
     const elapsedMicros = now - cfg.roundStartMicros;
     const elapsedSec = Number(elapsedMicros) / 1_000_000;
-    const rampDecrease = BigInt(Math.floor(elapsedSec * Number(BOT_SPAWN_RAMP_MICROS_PER_SEC)));
-    const intervalMicros =
-      BOT_SPAWN_BASE_INTERVAL_MICROS - rampDecrease < BOT_SPAWN_MIN_INTERVAL_MICROS
-        ? BOT_SPAWN_MIN_INTERVAL_MICROS
-        : BOT_SPAWN_BASE_INTERVAL_MICROS - rampDecrease;
+    const baseInterval = isSurvival ? SURVIVAL_SPAWN_BASE_INTERVAL_MICROS : BOT_SPAWN_BASE_INTERVAL_MICROS;
+    const minInterval = isSurvival ? SURVIVAL_SPAWN_MIN_INTERVAL_MICROS : BOT_SPAWN_MIN_INTERVAL_MICROS;
+    const rampPerSec = isSurvival ? SURVIVAL_SPAWN_RAMP_MICROS_PER_SEC : BOT_SPAWN_RAMP_MICROS_PER_SEC;
+    const rampDecrease = BigInt(Math.floor(elapsedSec * Number(rampPerSec)));
+    let intervalMicros =
+      baseInterval - rampDecrease < minInterval
+        ? minInterval
+        : baseInterval - rampDecrease;
+    const playerCount = Math.max(1, playersInRoom(ctx, roomId).length);
+    intervalMicros = BigInt(
+      Math.max(Number(minInterval), Math.floor(Number(intervalMicros) / playerCount)),
+    );
     if (now - cfg.lastBotZombieSpawnMicros >= intervalMicros) {
       const botCount = botZombiesInRoom(ctx, roomId).length;
       const humansForSpawn = playersInRoom(ctx, roomId).filter((p) => !p.isZombie);
@@ -631,6 +718,8 @@ export const tick = spacetimedb.reducer((ctx) => {
           dirY: 0,
           speedBoostUntilMicros: 0n,
           abilityCooldownUntilMicros: 0n,
+          health: ZOMBIE_MAX_HEALTH,
+          maxHealth: ZOMBIE_MAX_HEALTH,
         });
         ctx.db.GameConfig.id.update({
           ...cfg,
@@ -643,7 +732,7 @@ export const tick = spacetimedb.reducer((ctx) => {
     // AI: set direction toward nearest human for bot zombies (vs_bots only)
     const allPlayersSnap = playersInRoom(ctx, roomId);
     const humansSnap = allPlayersSnap.filter((p) => !p.isZombie);
-    if (vsBots && humansSnap.length > 0) {
+    if (isBotMode && humansSnap.length > 0) {
       for (const p of allPlayersSnap) {
         if (p.isZombie && p.isBot) {
         let bestD2 = Infinity;
@@ -710,8 +799,8 @@ export const tick = spacetimedb.reducer((ctx) => {
     ctx.db.Player.identity.update({ ...p, x: nx, y: ny });
     }
 
-    // Move BotZombies (vs_bots) with bot-vs-bot collision so they don't clip through each other
-    if (vsBots) {
+    // Move BotZombies (vs_bots / survival) with bot-vs-bot collision so they don't clip through each other
+    if (isBotMode) {
       const botZombiesList = botZombiesInRoom(ctx, roomId);
       const movedBots = new Map<bigint, { x: number; y: number }>();
       for (const bz of botZombiesList) {
@@ -756,13 +845,37 @@ export const tick = spacetimedb.reducer((ctx) => {
       }
     }
 
-    // Infection
+    // Survival: remove dead bot zombies
+    if (isSurvival) {
+      for (const bz of botZombiesInRoom(ctx, roomId)) {
+        if (bz.health <= 0) {
+          ctx.db.BotZombie.id.delete(bz.id);
+        }
+      }
+    }
+
+    // Infection (vs_bots, vs_humans) or melee damage (survival)
     const players = playersInRoom(ctx, roomId);
     const zombies = players.filter((p) => p.isZombie);
     const humans = players.filter((p) => !p.isZombie);
     const infectedThisTick = new Set<string>();
 
-    if (vsBots) {
+    if (isSurvival) {
+      // Melee damage: bot zombies damage humans in range (no infection)
+      const botZombies = botZombiesInRoom(ctx, roomId);
+      for (const h of humans) {
+        if (h.health <= 0) continue;
+        let meleeCount = 0;
+        for (const z of botZombies) {
+          if (Math.hypot(h.x - z.x, h.y - z.y) < MELEE_RADIUS) meleeCount++;
+        }
+        if (meleeCount > 0) {
+          const totalDamage = meleeCount * MELEE_DAMAGE;
+          const newHealth = h.health <= totalDamage ? 0 : h.health - totalDamage;
+          ctx.db.Player.identity.update({ ...h, health: newHealth });
+        }
+      }
+    } else if (vsBots) {
       const botZombies = botZombiesInRoom(ctx, roomId);
     for (const z of zombies) {
       let infectedCount = 0;
@@ -817,7 +930,9 @@ export const tick = spacetimedb.reducer((ctx) => {
 
     // Round end: timer expiry (humans win) or 0 humans (zombies win)
     const allPlayersFinal = playersInRoom(ctx, roomId);
-    const humansLeft = allPlayersFinal.filter((p) => !p.isZombie);
+    const humansLeft = isSurvival
+      ? allPlayersFinal.filter((p) => p.health > 0)
+      : allPlayersFinal.filter((p) => !p.isZombie);
     const timerExpired = now - cfgAfterSpawn.roundStartMicros >= ROUND_DURATION_MICROS;
 
     if (timerExpired && humansLeft.length >= 1) {
@@ -829,7 +944,7 @@ export const tick = spacetimedb.reducer((ctx) => {
       });
     } else if (humansLeft.length === 0) {
       const zombiesWin =
-        !vsBots ? allPlayersFinal.length >= 2 : true;
+        isSurvival ? true : !vsBots ? allPlayersFinal.length >= 2 : true;
       if (zombiesWin) {
         ctx.db.GameConfig.id.update({
           ...cfgAfterSpawn,
@@ -850,6 +965,87 @@ export const set_input = spacetimedb.reducer(
     if (!player || player.isBot || player.roomId === ROOM_ID_MENU) return;
     const { x, y } = normalizeDir(dirX, dirY);
     ctx.db.Player.identity.update({ ...player, dirX: x, dirY: y });
+  },
+);
+
+// ─── fire_weapon: survival mode only, hitscan toward (targetX, targetY) ─────
+export const fire_weapon = spacetimedb.reducer(
+  { targetX: t.f64(), targetY: t.f64() },
+  (ctx, { targetX, targetY }) => {
+    const player = ctx.db.Player.identity.find(ctx.sender);
+    if (!player || player.roomId === ROOM_ID_MENU) return;
+    const config = ctx.db.GameConfig.id.find(player.roomId);
+    if (!config || config.gameMode !== "survival" || !config.roundActive) return;
+    const now = ctx.timestamp.microsSinceUnixEpoch;
+    if (now < player.weaponCooldownUntilMicros) return;
+
+    ctx.db.Player.identity.update({
+      ...player,
+      weaponCooldownUntilMicros: now + WEAPON_COOLDOWN_MICROS,
+    });
+
+    const dx = targetX - player.x;
+    const dy = targetY - player.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ux = len > 1e-6 ? dx / len : 1;
+    const uy = len > 1e-6 ? dy / len : 0;
+
+    const obstacles = obstaclesInRoom(ctx, player.roomId);
+    const obstacleT = rayObstacleFirstHit(player.x, player.y, ux, uy, obstacles, WEAPON_RANGE);
+
+    // Hitscan: first hit along the ray (smallest positive distance along ray), within WEAPON_HIT_RADIUS of the ray, and not behind a wall
+    type Hit = { alongRay: number; bot?: { id: bigint; x: number; y: number; health: number }; human?: { identity: unknown; x: number; y: number; health: number } };
+    let best: Hit | null = null;
+    const hitRadiusSq = WEAPON_HIT_RADIUS * WEAPON_HIT_RADIUS;
+
+    for (const bz of botZombiesInRoom(ctx, player.roomId)) {
+      if (bz.health <= 0) continue;
+      const ex = bz.x - player.x;
+      const ey = bz.y - player.y;
+      const alongRay = ex * ux + ey * uy;
+      if (alongRay <= 0 || alongRay > WEAPON_RANGE || alongRay >= obstacleT) continue;
+      const perpX = ex - alongRay * ux;
+      const perpY = ey - alongRay * uy;
+      if (perpX * perpX + perpY * perpY > hitRadiusSq) continue;
+      if (!best || alongRay < best.alongRay) {
+        best = { alongRay, bot: { id: bz.id, x: bz.x, y: bz.y, health: bz.health } };
+      }
+    }
+    for (const p of playersInRoom(ctx, player.roomId)) {
+      if (p.identity.toHexString() === ctx.sender.toHexString() || p.health <= 0) continue;
+      const ex = p.x - player.x;
+      const ey = p.y - player.y;
+      const alongRay = ex * ux + ey * uy;
+      if (alongRay <= 0 || alongRay > WEAPON_RANGE || alongRay >= obstacleT) continue;
+      const perpX = ex - alongRay * ux;
+      const perpY = ey - alongRay * uy;
+      if (perpX * perpX + perpY * perpY > hitRadiusSq) continue;
+      if (!best || alongRay < best.alongRay) {
+        best = { alongRay, human: { identity: p.identity, x: p.x, y: p.y, health: p.health } };
+      }
+    }
+
+    if (best?.bot) {
+      const bz = ctx.db.BotZombie.id.find(best.bot.id);
+      if (bz) {
+        const newHealth = bz.health <= WEAPON_DAMAGE ? 0 : bz.health - WEAPON_DAMAGE;
+        if (newHealth <= 0) {
+          ctx.db.BotZombie.id.delete(bz.id);
+          const shooter = ctx.db.Player.identity.find(ctx.sender);
+          if (shooter) {
+            ctx.db.Player.identity.update({ ...shooter, score: shooter.score + 1n });
+          }
+        } else {
+          ctx.db.BotZombie.id.update({ ...bz, health: newHealth });
+        }
+      }
+    } else if (best?.human) {
+      const target = ctx.db.Player.identity.find(best.human.identity as import("spacetimedb").Identity);
+      if (target) {
+        const newHealth = target.health <= WEAPON_DAMAGE ? 0 : target.health - WEAPON_DAMAGE;
+        ctx.db.Player.identity.update({ ...target, health: newHealth });
+      }
+    }
   },
 );
 
@@ -891,6 +1087,7 @@ export const set_name = spacetimedb.reducer(
 function modeToRoomId(mode: string): bigint | null {
   if (mode === "vs_humans") return ROOM_ID_VS_HUMANS;
   if (mode === "vs_bots") return ROOM_ID_VS_BOTS;
+  if (mode === "survival") return ROOM_ID_SURVIVAL;
   return null;
 }
 
@@ -898,15 +1095,15 @@ function modeToRoomId(mode: string): bigint | null {
 export const join_room = spacetimedb.reducer(
   { mode: t.string() },
   (ctx, { mode }) => {
-    if (mode !== "vs_humans" && mode !== "vs_bots") {
-      throw new SenderError("mode must be vs_humans or vs_bots");
+    if (mode !== "vs_humans" && mode !== "vs_bots" && mode !== "survival") {
+      throw new SenderError("mode must be vs_humans, vs_bots, or survival");
     }
     const roomId = modeToRoomId(mode)!;
     const player = ctx.db.Player.identity.find(ctx.sender);
     if (!player || player.roomId === roomId) return;
 
     const oldRoomId = player.roomId;
-    if (oldRoomId === ROOM_ID_VS_HUMANS || oldRoomId === ROOM_ID_VS_BOTS) {
+    if (oldRoomId === ROOM_ID_VS_HUMANS || oldRoomId === ROOM_ID_VS_BOTS || oldRoomId === ROOM_ID_SURVIVAL) {
       const oldRoomPlayers = playersInRoom(ctx, oldRoomId);
       const newCount = oldRoomPlayers.length - 1;
       const oldConfig = ctx.db.GameConfig.id.find(oldRoomId);
@@ -932,7 +1129,8 @@ export const join_room = spacetimedb.reducer(
     const roomPlayers = playersInRoom(ctx, roomId);
     const isFirstInRoom = roomPlayers.length === 0;
     const vsBots = config.gameMode === "vs_bots";
-    const spawnAsZombie = vsBots ? false : isFirstInRoom;
+    const isSurvivalJoin = config.gameMode === "survival";
+    const spawnAsZombie = vsBots || isSurvivalJoin ? false : isFirstInRoom;
 
     ctx.db.Player.identity.update({
       ...player,
@@ -946,6 +1144,9 @@ export const join_room = spacetimedb.reducer(
       score: 0n,
       speedBoostUntilMicros: 0n,
       abilityCooldownUntilMicros: 0n,
+      health: isSurvivalJoin ? PLAYER_MAX_HEALTH : player.health,
+      maxHealth: isSurvivalJoin ? PLAYER_MAX_HEALTH : player.maxHealth,
+      weaponCooldownUntilMicros: isSurvivalJoin ? 0n : player.weaponCooldownUntilMicros,
     });
 
     const countInRoom = roomPlayers.length + 1;
@@ -956,9 +1157,10 @@ export const join_room = spacetimedb.reducer(
       mapHeight: newSize,
     });
 
-    if (mode === "vs_bots" && !config.roundActive && config.roundEndMicros === 0n) {
+    if ((mode === "vs_bots" || mode === "survival") && !config.roundActive && config.roundEndMicros === 0n) {
       const now = ctx.timestamp.microsSinceUnixEpoch;
       const newRoundNum = config.roundNumber + 1n;
+      const isSurvivalAutoStart = mode === "survival";
       generateAllObstacles(ctx, roomId, newRoundNum, config.mapWidth, config.mapHeight);
       const updatedPlayers = playersInRoom(ctx, roomId);
       for (const p of updatedPlayers) {
@@ -966,6 +1168,7 @@ export const join_room = spacetimedb.reducer(
           ...p,
           isZombie: false,
           isBot: false,
+          ...(isSurvivalAutoStart ? { health: PLAYER_MAX_HEALTH, maxHealth: PLAYER_MAX_HEALTH, weaponCooldownUntilMicros: 0n } : {}),
           score: 0n,
           speedBoostUntilMicros: 0n,
           abilityCooldownUntilMicros: 0n,
@@ -974,7 +1177,7 @@ export const join_room = spacetimedb.reducer(
       const updatedConfig = ctx.db.GameConfig.id.find(roomId)!;
       ctx.db.GameConfig.id.update({
         ...updatedConfig,
-        gameMode: "vs_bots",
+        gameMode: mode as "vs_bots" | "survival",
         roundActive: true,
         roundNumber: newRoundNum,
         roundStartMicros: now,
@@ -1007,7 +1210,7 @@ export const leave_room = spacetimedb.reducer((ctx) => {
     abilityCooldownUntilMicros: 0n,
   });
 
-  if (oldRoomId !== ROOM_ID_VS_HUMANS && oldRoomId !== ROOM_ID_VS_BOTS) return;
+  if (oldRoomId !== ROOM_ID_VS_HUMANS && oldRoomId !== ROOM_ID_VS_BOTS && oldRoomId !== ROOM_ID_SURVIVAL) return;
   const remaining = playersInRoom(ctx, oldRoomId);
   const config = ctx.db.GameConfig.id.find(oldRoomId);
   if (!config) return;
@@ -1072,6 +1275,21 @@ export const init = spacetimedb.init((ctx) => {
       gameMode: "vs_bots",
     });
   }
+  if (!ctx.db.GameConfig.id.find(ROOM_ID_SURVIVAL)) {
+    ctx.db.GameConfig.insert({
+      id: ROOM_ID_SURVIVAL,
+      roundActive: false,
+      roundNumber: 0n,
+      roundStartMicros: 0n,
+      roundEndMicros: 0n,
+      lastTickMicros: 0n,
+      lastBotZombieSpawnMicros: 0n,
+      mapWidth: BASE_MAP_SIZE,
+      mapHeight: BASE_MAP_SIZE,
+      roundWinner: undefined,
+      gameMode: "survival",
+    });
+  }
 });
 
 // ─── Lifecycle ─────────────────────────────────────────────────────────────
@@ -1103,6 +1321,9 @@ export const onConnect = spacetimedb.clientConnected((ctx) => {
     score: 0n,
     speedBoostUntilMicros: 0n,
     abilityCooldownUntilMicros: 0n,
+    health: PLAYER_MAX_HEALTH,
+    maxHealth: PLAYER_MAX_HEALTH,
+    weaponCooldownUntilMicros: 0n,
   });
 });
 
@@ -1113,7 +1334,7 @@ export const onDisconnect = spacetimedb.clientDisconnected((ctx) => {
   const roomId = player.roomId;
   ctx.db.Player.identity.delete(ctx.sender);
 
-  if (roomId !== ROOM_ID_VS_HUMANS && roomId !== ROOM_ID_VS_BOTS) return;
+  if (roomId !== ROOM_ID_VS_HUMANS && roomId !== ROOM_ID_VS_BOTS && roomId !== ROOM_ID_SURVIVAL) return;
 
   const players = playersInRoom(ctx, roomId);
   const zombies = players.filter((p) => p.isZombie);
@@ -1141,6 +1362,7 @@ export const onDisconnect = spacetimedb.clientDisconnected((ctx) => {
     });
     if (
       config.gameMode !== "vs_bots" &&
+      config.gameMode !== "survival" &&
       zombies.length === 0
     ) {
       const idx = Number(config.roundNumber % BigInt(players.length));

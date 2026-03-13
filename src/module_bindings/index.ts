@@ -34,6 +34,7 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import FireWeaponReducer from "./fire_weapon_reducer";
 import JoinRoomReducer from "./join_room_reducer";
 import LeaveRoomReducer from "./leave_room_reducer";
 import SetInputReducer from "./set_input_reducer";
@@ -60,6 +61,9 @@ const tablesSchema = __schema({
       { name: 'id', algorithm: 'btree', columns: [
         'id',
       ] },
+      { name: 'bot_zombie_room_id', algorithm: 'btree', columns: [
+        'roomId',
+      ] },
     ],
     constraints: [
       { name: 'bot_zombie_id_key', constraint: 'unique', columns: ['id'] },
@@ -82,6 +86,9 @@ const tablesSchema = __schema({
       { name: 'id', algorithm: 'btree', columns: [
         'id',
       ] },
+      { name: 'obstacle_room_id', algorithm: 'btree', columns: [
+        'roomId',
+      ] },
     ],
     constraints: [
       { name: 'obstacle_id_key', constraint: 'unique', columns: ['id'] },
@@ -93,6 +100,9 @@ const tablesSchema = __schema({
       { name: 'identity', algorithm: 'btree', columns: [
         'identity',
       ] },
+      { name: 'player_room_id', algorithm: 'btree', columns: [
+        'roomId',
+      ] },
     ],
     constraints: [
       { name: 'player_identity_key', constraint: 'unique', columns: ['identity'] },
@@ -102,6 +112,7 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("fire_weapon", FireWeaponReducer),
   __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("leave_room", LeaveRoomReducer),
   __reducerSchema("set_input", SetInputReducer),

@@ -23,4 +23,7 @@ export default __t.row({
   score: __t.u64(),
   speedBoostUntilMicros: __t.u64().name("speed_boost_until_micros"),
   abilityCooldownUntilMicros: __t.u64().name("ability_cooldown_until_micros"),
+  health: __t.u32(),
+  maxHealth: __t.u32().name("max_health"),
+  weaponCooldownUntilMicros: __t.u64().name("weapon_cooldown_until_micros"),
 });

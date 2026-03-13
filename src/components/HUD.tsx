@@ -105,12 +105,12 @@ export function HUD({
   const [nameError, setNameError] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isSurvival = config?.gameMode === "survival";
   const humans = players.filter((p) => !p.isZombie);
   const zombies = players.filter((p) => p.isZombie);
-  const humanCount = humans.length;
+  const humanCount = isSurvival ? players.filter((p) => p.health > 0).length : humans.length;
   const zombieCount =
-    zombies.length +
-    (config?.gameMode === "vs_bots" ? botZombies.length : 0);
+    isSurvival ? botZombies.length : zombies.length + (config?.gameMode === "vs_bots" ? botZombies.length : 0);
 
   const localPlayer = localIdentity
     ? players.find(
@@ -121,7 +121,7 @@ export function HUD({
   const currentName = localPlayer?.name ?? "Player";
   const roundActive = config?.roundActive ?? false;
 
-  const showAbilityBar = isZombie && roundActive;
+  const showAbilityBar = isZombie && roundActive && !isSurvival;
   const {
     fill: abilityBarFill,
     isBoosting: boostActive,
@@ -129,6 +129,11 @@ export function HUD({
   } = useAbilityBar(showAbilityBar);
 
   const nowMicros = BigInt(Date.now()) * 1000n;
+  const weaponReady = localPlayer && nowMicros >= localPlayer.weaponCooldownUntilMicros;
+  const weaponCooldownRemainingMs = localPlayer && localPlayer.weaponCooldownUntilMicros > nowMicros
+    ? Number(localPlayer.weaponCooldownUntilMicros - nowMicros) / 1000
+    : 0;
+
   const roundElapsedMs = config?.roundStartMicros
     ? Number(nowMicros - config.roundStartMicros) / 1000
     : 0;
@@ -240,6 +245,56 @@ export function HUD({
             Boost
           </button>
         </div>
+      )}
+      {isSurvival && roundActive && localPlayer && (
+        <>
+          <div className="hud-survival-wrap" aria-label="Health and weapon">
+            <div className="hud-health-bar-wrap">
+              <span className="hud-health-label">HP</span>
+              <div className="hud-health-bar-track">
+                <div
+                  className="hud-health-bar-fill"
+                  style={{
+                    width: `${Math.max(0, (localPlayer.health / (localPlayer.maxHealth || 1)) * 100)}%`,
+                  }}
+                />
+              </div>
+              <span className="hud-health-value">{localPlayer.health}/{localPlayer.maxHealth}</span>
+            </div>
+            <div className="hud-weapon-status">
+              {weaponReady ? (
+                <span className="hud-weapon-ready">Shoot (click or hold button)</span>
+              ) : (
+                <span className="hud-weapon-cooldown">Weapon: {(weaponCooldownRemainingMs / 1000).toFixed(1)}s</span>
+              )}
+            </div>
+          </div>
+          <div
+            className="hud-shoot-btn-wrap"
+            aria-label="Shoot (hold for continuous fire)"
+          >
+            <button
+              type="button"
+              className="hud-shoot-btn"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.releasePointerCapture?.(e.pointerId);
+                window.dispatchEvent(new Event('zovid-shoot-down'));
+              }}
+              onPointerUp={(e) => {
+                e.preventDefault();
+                window.dispatchEvent(new Event('zovid-shoot-up'));
+              }}
+              onPointerLeave={(e) => {
+                if (e.buttons !== 0) window.dispatchEvent(new Event('zovid-shoot-up'));
+              }}
+              onPointerCancel={() => window.dispatchEvent(new Event('zovid-shoot-up'))}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              FIRE
+            </button>
+          </div>
+        </>
       )}
       <div className="hud-stats">
         <span className="hud-stat">Humans: {humanCount}</span>

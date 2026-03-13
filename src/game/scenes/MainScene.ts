@@ -77,6 +77,7 @@ export class MainScene extends Phaser.Scene {
   static readonly SHOOT_UP_EVENT = 'zovid-shoot-up';
 
   private shootButtonHeld = false;
+  private canvasShootHeld = false;
   private lastShotTime = 0;
   private lastAimWorld = { x: 0, y: 0 };
   private lastAimSet = false;
@@ -315,12 +316,16 @@ export class MainScene extends Phaser.Scene {
       this.setupNativeTouchBoostFallback();
     }
 
-    // Survival: fire weapon on click/tap (aim at pointer world position)
+    // Survival: fire on click/tap and hold mouse to shoot continuously (aim at pointer)
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      const { config } = getGameState();
+      if (config?.gameMode === 'survival') this.canvasShootHeld = true;
       this.tryFireAtWorld(pointer.x, pointer.y);
     });
+    this.input.on('pointerup', () => { this.canvasShootHeld = false; });
+    this.input.on('pointerout', () => { this.canvasShootHeld = false; });
 
-    // Hold-to-shoot: listen for shoot button (HUD) held state
+    // Hold-to-shoot: listen for shoot button (HUD) held state (mobile)
     const onShootDown = () => { this.shootButtonHeld = true; };
     const onShootUp = () => { this.shootButtonHeld = false; };
     window.addEventListener(MainScene.SHOOT_DOWN_EVENT, onShootDown);
@@ -636,19 +641,25 @@ export class MainScene extends Phaser.Scene {
       conn.reducers.useZombieAbility({});
     }
 
-    // Hold-to-shoot (survival): fire at cooldown rate while shoot button is held
+    // Hold-to-shoot (survival): fire at cooldown rate while mouse or shoot button is held
+    const shootHeld = this.shootButtonHeld || this.canvasShootHeld;
     if (
       config?.gameMode === 'survival' &&
       config?.roundActive &&
       me &&
       !me.isZombie &&
       me.health > 0 &&
-      this.shootButtonHeld &&
+      shootHeld &&
       this.time.now - this.lastShotTime >= MainScene.WEAPON_COOLDOWN_MS
     ) {
       const nowMicrosCheck = BigInt(Date.now()) * 1000n;
       if (nowMicrosCheck >= me.weaponCooldownUntilMicros) {
-        this.tryFireFromButton();
+        if (this.canvasShootHeld) {
+          const ptr = this.input.activePointer;
+          this.tryFireAtWorld(ptr.x, ptr.y);
+        } else {
+          this.tryFireFromButton();
+        }
         this.lastShotTime = this.time.now;
       }
     }

@@ -872,7 +872,11 @@ export const tick = spacetimedb.reducer((ctx) => {
         if (meleeCount > 0) {
           const totalDamage = meleeCount * MELEE_DAMAGE;
           const newHealth = h.health <= totalDamage ? 0 : h.health - totalDamage;
-          ctx.db.Player.identity.update({ ...h, health: newHealth });
+          ctx.db.Player.identity.update({
+            ...h,
+            health: newHealth,
+            ...(newHealth === 0 ? { isZombie: true, isBot: true } : {}),
+          });
         }
       }
     } else if (vsBots) {
@@ -1043,7 +1047,11 @@ export const fire_weapon = spacetimedb.reducer(
       const target = ctx.db.Player.identity.find(best.human.identity as import("spacetimedb").Identity);
       if (target) {
         const newHealth = target.health <= WEAPON_DAMAGE ? 0 : target.health - WEAPON_DAMAGE;
-        ctx.db.Player.identity.update({ ...target, health: newHealth });
+        ctx.db.Player.identity.update({
+          ...target,
+          health: newHealth,
+          ...(newHealth === 0 ? { isZombie: true, isBot: true } : {}),
+        });
       }
     }
   },

@@ -381,13 +381,18 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
-/* Survival: shoot button bottom-left (mobile-friendly, hold to fire) */
+/* Survival: shoot button bottom-left, mobile only (hidden on desktop) */
 .hud-shoot-btn-wrap {
   position: absolute;
   left: 1rem;
   bottom: 1.25rem;
   pointer-events: auto;
   z-index: 10;
+}
+@media (min-width: 768px) {
+  .hud-shoot-btn-wrap {
+    display: none;
+  }
 }
 .hud-shoot-btn {
   min-width: 4.75rem;

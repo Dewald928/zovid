@@ -105,6 +105,22 @@ function collidesWithObstacle(
   return false;
 }
 
+function collidesWithCharacters(
+  px: number,
+  py: number,
+  halfSize: number,
+  others: Array<{ x: number; y: number }>,
+): boolean {
+  const minDist = halfSize * 2;
+  const minDistSq = minDist * minDist;
+  for (const other of others) {
+    const dx = px - other.x;
+    const dy = py - other.y;
+    if (dx * dx + dy * dy < minDistSq) return true;
+  }
+  return false;
+}
+
 function insertObstacle(
   ctx: {
     db: {
@@ -694,9 +710,11 @@ export const tick = spacetimedb.reducer((ctx) => {
     ctx.db.Player.identity.update({ ...p, x: nx, y: ny });
     }
 
-    // Move BotZombies (vs_bots)
+    // Move BotZombies (vs_bots) with bot-vs-bot collision so they don't clip through each other
     if (vsBots) {
-      for (const bz of botZombiesInRoom(ctx, roomId)) {
+      const botZombiesList = botZombiesInRoom(ctx, roomId);
+      const movedBots = new Map<bigint, { x: number; y: number }>();
+      for (const bz of botZombiesList) {
       const { x: dx, y: dy } = normalizeDir(bz.dirX, bz.dirY);
       const speed = ZOMBIE_SPEED;
       let nx = bz.x + dx * speed * TICK_DT_SEC;
@@ -715,7 +733,26 @@ export const tick = spacetimedb.reducer((ctx) => {
           ny = bz.y;
         }
       }
+      const botBlockers: Array<{ x: number; y: number }> = [];
+      for (const other of botZombiesList) {
+        if (other.id === bz.id) continue;
+        const pos = movedBots.get(other.id);
+        botBlockers.push(pos ?? { x: other.x, y: other.y });
+      }
+      if (collidesWithCharacters(nx, ny, PLAYER_HALF, botBlockers)) {
+        const tryX = collidesWithCharacters(nx, bz.y, PLAYER_HALF, botBlockers);
+        const tryY = collidesWithCharacters(bz.x, ny, PLAYER_HALF, botBlockers);
+        if (!tryX) {
+          ny = bz.y;
+        } else if (!tryY) {
+          nx = bz.x;
+        } else {
+          nx = bz.x;
+          ny = bz.y;
+        }
+      }
       ctx.db.BotZombie.id.update({ ...bz, x: nx, y: ny });
+      movedBots.set(bz.id, { x: nx, y: ny });
       }
     }
 

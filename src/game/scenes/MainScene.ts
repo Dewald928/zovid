@@ -4,6 +4,7 @@ import { VirtualJoystick } from '../VirtualJoystick';
 import { fireBoostActivated } from '../../components/HUD';
 
 const PLAYER_SIZE = 32;
+const PLAYER_HALF = PLAYER_SIZE / 2;
 const HUMAN_COLOR = 0x4488ff;
 const ZOMBIE_COLOR = 0x44ff44;
 const LOCAL_COLOR = 0xaa44ff;
@@ -325,6 +326,57 @@ export class MainScene extends Phaser.Scene {
     return x < w * 0.5 && y > h * 0.5;
   }
 
+  /** Minimum distance between character centers so they don't overlap (same as server). */
+  private static readonly MIN_CENTER_DIST = PLAYER_HALF * 2;
+
+  /**
+   * Clamp desired position so it doesn't overlap any blocker (opposite team / bots).
+   * Uses axis sliding: try X-only, then Y-only, then block.
+   */
+  private clampToNotOverlap(
+    desiredX: number,
+    desiredY: number,
+    currentX: number,
+    currentY: number,
+    blockers: Array<{ x: number; y: number }>,
+  ): { x: number; y: number } {
+    const minDistSq = MainScene.MIN_CENTER_DIST * MainScene.MIN_CENTER_DIST;
+    const overlaps = (ax: number, ay: number) => {
+      for (const b of blockers) {
+        const dx = ax - b.x;
+        const dy = ay - b.y;
+        if (dx * dx + dy * dy < minDistSq) return true;
+      }
+      return false;
+    };
+    if (!overlaps(desiredX, desiredY)) return { x: desiredX, y: desiredY };
+    const tryX = !overlaps(desiredX, currentY);
+    const tryY = !overlaps(currentX, desiredY);
+    if (tryX) return { x: desiredX, y: currentY };
+    if (tryY) return { x: currentX, y: desiredY };
+    return { x: currentX, y: currentY };
+  }
+
+  /** Nudge (ax, ay) away from (bx, by) so centers are at least MIN_CENTER_DIST apart. */
+  private static nudgeApart(
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+  ): { x: number; y: number } {
+    const dx = ax - bx;
+    const dy = ay - by;
+    const dSq = dx * dx + dy * dy;
+    if (dSq >= MainScene.MIN_CENTER_DIST * MainScene.MIN_CENTER_DIST || dSq < 1e-6) {
+      return { x: ax, y: ay };
+    }
+    const d = Math.sqrt(dSq);
+    const overlap = MainScene.MIN_CENTER_DIST - d;
+    const nx = dx / d;
+    const ny = dy / d;
+    return { x: ax + nx * overlap, y: ay + ny * overlap };
+  }
+
   update(_time: number, _delta: number): void {
     this.localIdentityHex = getLocalIdentity();
     const conn = getConnection();
@@ -412,6 +464,18 @@ export class MainScene extends Phaser.Scene {
     const seen = new Set<string>();
     const isLocal = (key: string) => key === this.localIdentityHex;
 
+    // Blockers for local player: opposite team players + bot zombies (so we don't clip through them)
+    const blockers: Array<{ x: number; y: number }> = [];
+    if (me) {
+      for (const p of players) {
+        if (p.identity.toHexString() === this.localIdentityHex || p.isZombie === me.isZombie) continue;
+        blockers.push({ x: p.x, y: p.y });
+      }
+      for (const bz of botZombies) {
+        blockers.push({ x: bz.x, y: bz.y });
+      }
+    }
+
     for (const p of players) {
       const key = p.identity.toHexString();
       seen.add(key);
@@ -432,12 +496,15 @@ export class MainScene extends Phaser.Scene {
             ? LOCAL_ZOMBIE_SPEED_BOOST
             : LOCAL_ZOMBIE_SPEED;
         const speed = p.isZombie ? zombieSpeed : LOCAL_SPEED;
-        const predX = rect.x + dirX * speed * dt;
-        const predY = rect.y + dirY * speed * dt;
-        const clampedX = Math.max(0, Math.min(mapW, predX));
-        const clampedY = Math.max(0, Math.min(mapH, predY));
-        rect.x = Phaser.Math.Linear(clampedX, p.x, LOCAL_LERP);
-        rect.y = Phaser.Math.Linear(clampedY, p.y, LOCAL_LERP);
+        let predX = rect.x + dirX * speed * dt;
+        let predY = rect.y + dirY * speed * dt;
+        predX = Math.max(0, Math.min(mapW, predX));
+        predY = Math.max(0, Math.min(mapH, predY));
+        const clamped = this.clampToNotOverlap(predX, predY, rect.x, rect.y, blockers);
+        predX = clamped.x;
+        predY = clamped.y;
+        rect.x = Phaser.Math.Linear(predX, p.x, LOCAL_LERP);
+        rect.y = Phaser.Math.Linear(predY, p.y, LOCAL_LERP);
       } else {
         rect.x = Phaser.Math.Linear(rect.x, p.x, LERP);
         rect.y = Phaser.Math.Linear(rect.y, p.y, LERP);
@@ -513,8 +580,40 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
-    const localPlayer = this.localIdentityHex ? players.find((p) => p.identity.toHexString() === this.localIdentityHex) : null;
+    // Nudge other sprites away from local player so they don't clip (client-side display only)
     const localSprite = this.localIdentityHex ? this.playerSprites.get(this.localIdentityHex) : null;
+    if (localSprite) {
+      const lx = localSprite.x;
+      const ly = localSprite.y;
+      for (const [key, rect] of this.playerSprites) {
+        if (key === this.localIdentityHex) continue;
+        const nudged = MainScene.nudgeApart(rect.x, rect.y, lx, ly);
+        rect.x = nudged.x;
+        rect.y = nudged.y;
+      }
+      for (const [, rect] of this.botZombieSprites) {
+        const nudged = MainScene.nudgeApart(rect.x, rect.y, lx, ly);
+        rect.x = nudged.x;
+        rect.y = nudged.y;
+      }
+    }
+
+    // Nudge bot zombie sprites apart from each other so they don't clip
+    const botRects = [...this.botZombieSprites.values()];
+    for (let i = 0; i < botRects.length; i++) {
+      for (let j = i + 1; j < botRects.length; j++) {
+        const a = botRects[i];
+        const b = botRects[j];
+        const nudgedA = MainScene.nudgeApart(a.x, a.y, b.x, b.y);
+        const nudgedB = MainScene.nudgeApart(b.x, b.y, a.x, a.y);
+        a.x = nudgedA.x;
+        a.y = nudgedA.y;
+        b.x = nudgedB.x;
+        b.y = nudgedB.y;
+      }
+    }
+
+    const localPlayer = this.localIdentityHex ? players.find((p) => p.identity.toHexString() === this.localIdentityHex) : null;
     if (localPlayer && localSprite) {
       this.cameras.main.centerOn(localSprite.x, localSprite.y);
       const isZombie = localPlayer.isZombie;
